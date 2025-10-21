@@ -12,8 +12,8 @@
 
 #include <random>
 
-const glm::vec3 minBoundary(-20.0f, 0.0f, -20.0f);
-const glm::vec3 maxBoundary( 20.0f, 5.0f,  20.0f);
+const glm::vec3 minBoundary(-20.0f, -20.0f, -20.0f);
+const glm::vec3 maxBoundary( 20.0f, 20.0f,  20.0f);
 
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
