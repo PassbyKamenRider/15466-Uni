@@ -12,8 +12,8 @@
 
 #include <random>
 
-const glm::vec3 minBoundary(-20.0f, -20.0f, -20.0f);
-const glm::vec3 maxBoundary( 20.0f, 20.0f,  20.0f);
+const glm::vec3 minBoundary(-20.0f, -30.0f, -15.0f);
+const glm::vec3 maxBoundary( 20.0f,  30.0f,  15.0f);
 
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
@@ -55,10 +55,12 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 		if (transform.name == "Hip.FL") hip = &transform;
 		else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
 		else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
+		else if (transform.name == "Sphere") player = &transform; //add player pointer
 	}
 	if (hip == nullptr) throw std::runtime_error("Hip not found.");
 	if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
 	if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
+	if (player == nullptr) throw std::runtime_error("Player not found.");
 
 	hip_base_rotation = hip->rotation;
 	upper_leg_base_rotation = upper_leg->rotation;
@@ -122,18 +124,18 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			return true;
 		}
 	} else if (evt.type == SDL_EVENT_MOUSE_MOTION) {
-		if (SDL_GetWindowRelativeMouseMode(Mode::window) == true) {
-			glm::vec2 motion = glm::vec2(
-				evt.motion.xrel / float(window_size.y),
-				evt.motion.yrel / float(window_size.y)
-			);
-			camera->transform->rotation = glm::normalize(
-				glm::angleAxis(-motion.x * camera->fovy, glm::vec3(0.0f, 0.0f, 1.0f))
-				* camera->transform->rotation
-				* glm::angleAxis(-motion.y * camera->fovy, glm::vec3(1.0f, 0.0f, 0.0f))
-			);
-			return true;
-		}
+		// if (SDL_GetWindowRelativeMouseMode(Mode::window) == true) {
+		// 	glm::vec2 motion = glm::vec2(
+		// 		evt.motion.xrel / float(window_size.y),
+		// 		evt.motion.yrel / float(window_size.y)
+		// 	);
+		// 	camera->transform->rotation = glm::normalize(
+		// 		glm::angleAxis(-motion.x * camera->fovy, glm::vec3(0.0f, 0.0f, 1.0f))
+		// 		* camera->transform->rotation
+		// 		* glm::angleAxis(-motion.y * camera->fovy, glm::vec3(1.0f, 0.0f, 0.0f))
+		// 	);
+		// 	return true;
+		// }
 	}
 
 	return false;
@@ -177,13 +179,15 @@ void PlayMode::update(float elapsed) {
 
 		glm::mat4x3 frame = camera->transform->make_parent_from_local();
 		glm::vec3 frame_right = frame[0];
-		//glm::vec3 up = frame[1];
+		glm::vec3 frame_up = frame[1];
 		glm::vec3 frame_forward = -frame[2];
 
-		camera->transform->position += move.x * frame_right + move.y * frame_forward;
+		camera->transform->position += move.x * frame_right + move.y * frame_up;
+		player-> position += move.x * frame_right + move.y * frame_up;
 
 		//clamp camera within the boundary
 		camera->transform->position = glm::clamp(camera->transform->position, minBoundary, maxBoundary);
+		player->position = glm::clamp(player->position, minBoundary, maxBoundary);
 	}
 
 	{ //update listener to camera position:

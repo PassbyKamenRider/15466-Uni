@@ -32,6 +32,7 @@ struct PlayMode : Mode {
 	Scene::Transform *hip = nullptr;
 	Scene::Transform *upper_leg = nullptr;
 	Scene::Transform *lower_leg = nullptr;
+	Scene::Transform *player = nullptr; // add pointer to player object
 	glm::quat hip_base_rotation;
 	glm::quat upper_leg_base_rotation;
 	glm::quat lower_leg_base_rotation;
