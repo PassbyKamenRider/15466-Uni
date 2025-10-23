@@ -15,6 +15,24 @@
 const glm::vec3 minBoundary(-20.0f, -30.0f, -15.0f);
 const glm::vec3 maxBoundary( 20.0f,  30.0f,  15.0f);
 
+glm::vec3 resolve_aabb_collision(glm::vec3 player_pos, float player_radius, BoxCollider const &box)
+{
+	glm::vec3 closest = glm::clamp(player_pos, box.min, box.max);
+	glm::vec3 delta = player_pos - closest;
+	float dist2 = glm::dot(delta, delta);
+
+	if (dist2 < player_radius * player_radius)
+	{
+		float dist = std::sqrt(dist2);
+		glm::vec3 push = dist > 0.0001f
+			? delta * ((player_radius - dist) / dist)
+			: glm::vec3(player_radius, 0.0f, 0.0f);
+		return player_pos + push;
+	}
+
+	return player_pos;
+}
+
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
 	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
@@ -35,44 +53,32 @@ Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 		drawable.pipeline.type = mesh.type;
 		drawable.pipeline.start = mesh.start;
 		drawable.pipeline.count = mesh.count;
-
 	});
-});
-
-Load< Sound::Sample > dusty_floor_sample(LoadTagDefault, []() -> Sound::Sample const * {
-	return new Sound::Sample(data_path("dusty-floor.opus"));
-});
-
-
-Load< Sound::Sample > honk_sample(LoadTagDefault, []() -> Sound::Sample const * {
-	return new Sound::Sample(data_path("honk.wav"));
 });
 
 
 PlayMode::PlayMode() : scene(*hexapod_scene) {
-	//get pointers to leg for convenience:
 	for (auto &transform : scene.transforms) {
-		if (transform.name == "Hip.FL") hip = &transform;
-		else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
-		else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
-		else if (transform.name == "Sphere") player = &transform; //add player pointer
+		if (transform.name == "Sphere") player = &transform;
 	}
-	if (hip == nullptr) throw std::runtime_error("Hip not found.");
-	if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
-	if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
-	if (player == nullptr) throw std::runtime_error("Player not found.");
 
-	hip_base_rotation = hip->rotation;
-	upper_leg_base_rotation = upper_leg->rotation;
-	lower_leg_base_rotation = lower_leg->rotation;
+	for (auto &transform : scene.transforms) {
+        if (transform.name.rfind("Collider", 0) == 0)
+		{
+            BoxCollider box;
+
+            glm::vec3 half_size = transform.scale;
+
+            box.min = transform.position - half_size;
+            box.max = transform.position + half_size;
+
+            colliders.push_back(box);
+        }
+    }
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
 	camera = &scene.cameras.front();
-
-	//start music loop playing:
-	// (note: position will be over-ridden in update())
-	leg_tip_loop = Sound::loop_3D(*dusty_floor_sample, 1.0f, get_leg_tip_position(), 10.0f);
 }
 
 PlayMode::~PlayMode() {
@@ -100,9 +106,6 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			down.downs += 1;
 			down.pressed = true;
 			return true;
-		} else if (evt.key.key == SDLK_SPACE) {
-			if (honk_oneshot) honk_oneshot->stop();
-			honk_oneshot = Sound::play_3D(*honk_sample, 0.3f, glm::vec3(4.6f, -7.8f, 6.9f)); //hardcoded position of front of car, from blender
 		}
 	} else if (evt.type == SDL_EVENT_KEY_UP) {
 		if (evt.key.key == SDLK_A) {
@@ -142,30 +145,8 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
-
-	//slowly rotates through [0,1):
-	wobble += elapsed / 10.0f;
-	wobble -= std::floor(wobble);
-
-	hip->rotation = hip_base_rotation * glm::angleAxis(
-		glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 1.0f, 0.0f)
-	);
-	upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
-		glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
-	lower_leg->rotation = lower_leg_base_rotation * glm::angleAxis(
-		glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
-
-	//move sound to follow leg tip position:
-	leg_tip_loop->set_position(get_leg_tip_position(), 1.0f / 60.0f);
-
 	//move camera:
 	{
-
 		//combine inputs into a move:
 		constexpr float PlayerSpeed = 30.0f;
 		glm::vec2 move = glm::vec2(0.0f);
@@ -183,11 +164,18 @@ void PlayMode::update(float elapsed) {
 		glm::vec3 frame_forward = -frame[2];
 
 		camera->transform->position += move.x * frame_right + move.y * frame_up;
-		player-> position += move.x * frame_right + move.y * frame_up;
+		player->position += move.x * frame_right + move.y * frame_up;
 
 		//clamp camera within the boundary
-		camera->transform->position = glm::clamp(camera->transform->position, minBoundary, maxBoundary);
+		//camera->transform->position = glm::clamp(camera->transform->position, minBoundary, maxBoundary);
 		player->position = glm::clamp(player->position, minBoundary, maxBoundary);
+		camera->transform->position = glm::vec3(player->position.x, camera->transform->position.y, player->position.z);
+
+		//resolve terrain collisions
+		for (auto const &box : colliders)
+		{
+			player->position = resolve_aabb_collision(player->position, player_radius, box);
+		}
 	}
 
 	{ //update listener to camera position:
@@ -247,9 +235,4 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
 	}
 	GL_ERRORS();
-}
-
-glm::vec3 PlayMode::get_leg_tip_position() {
-	//the vertex position here was read from the model in blender:
-	return lower_leg->make_world_from_local() * glm::vec4(-1.26137f, -11.861f, 0.0f, 1.0f);
 }
