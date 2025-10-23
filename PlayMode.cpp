@@ -15,22 +15,52 @@
 const glm::vec3 minBoundary(-20.0f, -30.0f, -15.0f);
 const glm::vec3 maxBoundary( 20.0f,  30.0f,  15.0f);
 
-glm::vec3 resolve_aabb_collision(glm::vec3 player_pos, float player_radius, BoxCollider const &box)
+glm::vec3 PlayMode::resolve_collision(BoxCollider const &box)
 {
-	glm::vec3 closest = glm::clamp(player_pos, box.min, box.max);
-	glm::vec3 delta = player_pos - closest;
-	float dist2 = glm::dot(delta, delta);
+	glm::vec3 player_pos = player->position;
 
-	if (dist2 < player_radius * player_radius)
+    glm::vec3 local_pos = glm::transpose(box.rotation) * (player_pos - box.center);
+
+    glm::vec3 closest = glm::clamp(local_pos, -box.halfSize, box.halfSize);
+
+    glm::vec3 local_delta = local_pos - closest;
+    float dist2 = glm::dot(local_delta, local_delta);
+
+    if (dist2 > 0.0f)
+    {
+        float dist = std::sqrt(dist2);
+        if (dist < player_radius)
+        {
+            glm::vec3 push_local = (local_delta / dist) * (player_radius - dist);
+            return player_pos + box.rotation * push_local;
+        }
+        return player_pos;
+    }
+
+    glm::vec3 penetration;
+    float min_overlap = std::numeric_limits<float>::max();
+    int axis = -1;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        float dist_to_pos = box.halfSize[i] - local_pos[i];
+        float dist_to_neg = box.halfSize[i] + local_pos[i];
+        float overlap = std::min(dist_to_pos, dist_to_neg);
+        if (overlap < min_overlap)
+        {
+            min_overlap = overlap;
+            axis = i;
+            penetration[i] = (dist_to_pos < dist_to_neg) ? overlap : -overlap;
+        }
+    }
+
+    glm::vec3 push(0.0f);
+    if (axis >= 0)
 	{
-		float dist = std::sqrt(dist2);
-		glm::vec3 push = dist > 0.0001f
-			? delta * ((player_radius - dist) / dist)
-			: glm::vec3(player_radius, 0.0f, 0.0f);
-		return player_pos + push;
-	}
+        push[axis] = (penetration[axis] > 0 ? player_radius : -player_radius);
+    }
 
-	return player_pos;
+    return player_pos + box.rotation * push;
 }
 
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
@@ -65,14 +95,11 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 	for (auto &transform : scene.transforms) {
         if (transform.name.rfind("Collider", 0) == 0)
 		{
-            BoxCollider box;
-
-            glm::vec3 half_size = transform.scale;
-
-            box.min = transform.position - half_size;
-            box.max = transform.position + half_size;
-
-            colliders.push_back(box);
+			BoxCollider box;
+			box.center = transform.position;
+			box.halfSize = transform.scale;
+			box.rotation = glm::mat3_cast(transform.rotation);
+			colliders.push_back(box);
         }
     }
 
@@ -174,7 +201,7 @@ void PlayMode::update(float elapsed) {
 		//resolve terrain collisions
 		for (auto const &box : colliders)
 		{
-			player->position = resolve_aabb_collision(player->position, player_radius, box);
+			player->position = resolve_collision(box);
 		}
 	}
 

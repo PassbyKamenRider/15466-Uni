@@ -10,8 +10,9 @@
 
 struct BoxCollider
 {
-	glm::vec3 min;
-	glm::vec3 max;
+	glm::vec3 center;
+    glm::vec3 halfSize;
+    glm::mat3 rotation;
 };
 
 struct PlayMode : Mode {
@@ -42,4 +43,6 @@ struct PlayMode : Mode {
 
 	// ----- collisions -----
 	std::vector<BoxCollider> colliders;
+
+	glm::vec3 resolve_collision(BoxCollider const &box);
 };
