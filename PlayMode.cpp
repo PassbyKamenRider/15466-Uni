@@ -15,6 +15,12 @@
 const glm::vec3 minBoundary(-20.0f, -30.0f, -15.0f);
 const glm::vec3 maxBoundary( 20.0f,  30.0f,  15.0f);
 
+static void request_quit() {
+    SDL_Event quit;
+    quit.type = SDL_EVENT_QUIT;
+    SDL_PushEvent(&quit);
+}
+
 glm::vec3 PlayMode::resolve_collision(BoxCollider const &box)
 {
 	glm::vec3 player_pos = player->position;
@@ -86,6 +92,17 @@ Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 	});
 });
 
+void PlayMode::reset_game() { //place holder. Can also dump this and just recreate a new gamemode
+    score = 0;
+    player->position = player_start_pos;
+    // TODO: reset objects, timer.
+    game_state = GameState::Playing;
+}
+
+void PlayMode::end_game() {
+    game_state = GameState::GameOver;
+}
+
 
 PlayMode::PlayMode() : scene(*hexapod_scene) {
 	for (auto &transform : scene.transforms) {
@@ -106,6 +123,10 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
 	camera = &scene.cameras.front();
+
+	player_start_pos = player->position;
+    game_state = GameState::Title; 
+	ui = std::make_unique<UiOverlay>();
 }
 
 PlayMode::~PlayMode() {
@@ -114,40 +135,87 @@ PlayMode::~PlayMode() {
 bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
 
 	if (evt.type == SDL_EVENT_KEY_DOWN) {
-		if (evt.key.key == SDLK_ESCAPE) {
-			SDL_SetWindowRelativeMouseMode(Mode::window, false);
-			return true;
-		} else if (evt.key.key == SDLK_A) {
-			left.downs += 1;
-			left.pressed = true;
-			return true;
-		} else if (evt.key.key == SDLK_D) {
-			right.downs += 1;
-			right.pressed = true;
-			return true;
-		} else if (evt.key.key == SDLK_W) {
-			up.downs += 1;
-			up.pressed = true;
-			return true;
-		} else if (evt.key.key == SDLK_S) {
-			down.downs += 1;
-			down.pressed = true;
-			return true;
+		switch(game_state) {
+			case GameState::Title:
+				if (evt.key.key == SDLK_RETURN) {
+					reset_game();
+					return true;
+				}
+				if (evt.key.key == SDLK_ESCAPE) {
+					request_quit();
+					return true;
+				}
+				break;
+			
+			case GameState::Playing:
+				if (evt.key.key == SDLK_ESCAPE) {
+					//SDL_SetWindowRelativeMouseMode(Mode::window, false);
+					game_state = GameState::Paused;
+					left.pressed = false;
+					right.pressed = false;
+					up.pressed = false;
+					down.pressed = false;
+					return true;
+				} else if (evt.key.key == SDLK_A) {
+					left.downs += 1;
+					left.pressed = true;
+					return true;
+				} else if (evt.key.key == SDLK_D) {
+					right.downs += 1;
+					right.pressed = true;
+					return true;
+				} else if (evt.key.key == SDLK_W) {
+					up.downs += 1;
+					up.pressed = true;
+					return true;
+				} else if (evt.key.key == SDLK_S) {
+					down.downs += 1;
+					down.pressed = true;
+					return true;
+				} else if (evt.key.key == SDLK_P) {
+					game_state = GameState::GameOver;
+					return true;
+				} 
+
+				break;
+
+			case GameState::Paused:
+				if (evt.key.key == SDLK_ESCAPE) {
+					game_state = GameState::Playing;
+					return true;
+				}
+				break;
+			
+			case GameState::GameOver:
+				if (evt.key.key == SDLK_RETURN) {
+					reset_game();
+					return true;
+				}
+				if (evt.key.key == SDLK_ESCAPE) {
+					request_quit();
+					return true;
+				}
+				break;
 		}
-	} else if (evt.type == SDL_EVENT_KEY_UP) {
-		if (evt.key.key == SDLK_A) {
-			left.pressed = false;
-			return true;
-		} else if (evt.key.key == SDLK_D) {
-			right.pressed = false;
-			return true;
-		} else if (evt.key.key == SDLK_W) {
-			up.pressed = false;
-			return true;
-		} else if (evt.key.key == SDLK_S) {
-			down.pressed = false;
-			return true;
+	}
+
+	else if (evt.type == SDL_EVENT_KEY_UP) {
+		if (game_state == GameState::Playing) {
+			if (evt.key.key == SDLK_A) {
+				left.pressed = false;
+				return true;
+			} else if (evt.key.key == SDLK_D) {
+				right.pressed = false;
+				return true;
+			} else if (evt.key.key == SDLK_W) {
+				up.pressed = false;
+				return true;
+			} else if (evt.key.key == SDLK_S) {
+				down.pressed = false;
+				return true;
+			}
 		}
+		
 	} else if (evt.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
 		if (SDL_GetWindowRelativeMouseMode(Mode::window) == false) {
 			SDL_SetWindowRelativeMouseMode(Mode::window, true);
@@ -167,11 +235,19 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 		// 	return true;
 		// }
 	}
-
+		
 	return false;
 }
 
 void PlayMode::update(float elapsed) {
+	
+	if (ui) ui->update(elapsed);
+
+    if (game_state != GameState::Playing) {
+        left.downs = right.downs = up.downs = down.downs = 0;
+        return;
+    }
+
 	//move camera:
 	{
 		//combine inputs into a move:
@@ -223,6 +299,17 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	//update camera aspect ratio for drawable:
 	camera->aspect = float(drawable_size.x) / float(drawable_size.y);
 
+	if (game_state == GameState::Title || game_state == GameState::GameOver) {
+        glClearColor(0.0f,0.0f,0.0f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glDisable(GL_DEPTH_TEST);
+        if (game_state == GameState::Title) ui->draw_title(drawable_size, "Uni");
+        else ui->draw_gameover(drawable_size, score);
+        glEnable(GL_DEPTH_TEST);
+        GL_ERRORS();
+        return;
+    }
+
 	//set up light type and position for lit_color_texture_program:
 	// TODO: consider using the Light(s) in the scene to do this
 	glUseProgram(lit_color_texture_program->program);
@@ -240,26 +327,35 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 
 	scene.draw(*camera);
 
-	{ //use DrawLines to overlay some text:
-		glDisable(GL_DEPTH_TEST);
-		float aspect = float(drawable_size.x) / float(drawable_size.y);
-		DrawLines lines(glm::mat4(
-			1.0f / aspect, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
-			0.0f, 0.0f, 0.0f, 1.0f
-		));
+	// { //use DrawLines to overlay some text:
+	// 	glDisable(GL_DEPTH_TEST);
+	// 	float aspect = float(drawable_size.x) / float(drawable_size.y);
+	// 	DrawLines lines(glm::mat4(
+	// 		1.0f / aspect, 0.0f, 0.0f, 0.0f,
+	// 		0.0f, 1.0f, 0.0f, 0.0f,
+	// 		0.0f, 0.0f, 1.0f, 0.0f,
+	// 		0.0f, 0.0f, 0.0f, 1.0f
+	// 	));
 
-		constexpr float H = 0.09f;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
-			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
-			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
-	}
+	// 	constexpr float H = 0.09f;
+	// 	lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+	// 		glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
+	// 		glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+	// 		glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+	// 	float ofs = 2.0f / drawable_size.y;
+	// 	lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+	// 		glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
+	// 		glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+	// 		glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+	// }
+
+	if (game_state == GameState::Playing) {
+        ui_model.player_pos = player->position;
+        ui_model.show_crosshair = true;
+        ui->draw(drawable_size, ui_model);
+    } else { // Paused
+        ui->draw_pause(drawable_size);
+    }
+
 	GL_ERRORS();
 }

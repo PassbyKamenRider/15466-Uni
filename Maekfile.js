@@ -172,11 +172,15 @@ const show_scene_names = [
 	maek.CPP('ShowSceneMode.cpp')
 ];
 
+const ui_names = [
+	maek.CPP('ui/UiOverlay.cpp')
+  ];
+
 //the '[exeFile =] LINK(objFiles, exeFileBase, [, options])' links an array of objects into an executable:
 // objFiles: array of objects to link
 // exeFileBase: name of executable file to produce
 //returns exeFile: exeFileBase + a platform-dependant suffix (e.g., '.exe' on windows)
-const game_exe = maek.LINK([...game_names, ...common_names], 'dist/game');
+const game_exe = maek.LINK([...game_names, ...common_names, ...ui_names], 'dist/game');
 const show_meshes_exe = maek.LINK([...show_meshes_names, ...common_names], 'scenes/show-meshes');
 const show_scene_exe = maek.LINK([...show_scene_names, ...common_names], 'scenes/show-scene');
 

@@ -8,6 +8,9 @@
 #include <vector>
 #include <deque>
 
+#include <memory>
+#include "ui/UiOverlay.hpp"
+
 struct BoxCollider
 {
 	glm::vec3 center;
@@ -25,6 +28,18 @@ struct PlayMode : Mode {
 	virtual void draw(glm::uvec2 const &drawable_size) override;
 
 	//----- game state -----
+	enum class GameState { Title, Playing, Paused, GameOver };
+	void end_game();   // 进入 GameOver
+    void reset_game(); // 重新开始
+    void add_score(int delta) { score += delta; } // 可选：加分接口
+
+	std::unique_ptr<UiOverlay> ui;
+    UiModel ui_model;
+
+    GameState game_state = GameState::Title;
+    int score = 0;
+
+    glm::vec3 player_start_pos = glm::vec3(0.0f);
 
 	//input tracking:
 	struct Button {
