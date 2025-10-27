@@ -25,6 +25,7 @@ const NEST_LIBS = `../nest-libs/${maek.OS}`;
 //set compile flags (these can also be overridden per-task using the "options" parameter):
 if (maek.OS === "windows") {
 	maek.options.CPPFlags.push(
+		`/utf-8`,
 		`/O2`, //optimize
 		`/D_USE_MATH_DEFINES`, //make sure M_PI exists
 		//include paths for nest libraries:

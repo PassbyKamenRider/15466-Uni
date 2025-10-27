@@ -18,6 +18,13 @@ struct BoxCollider
     glm::mat3 rotation;
 };
 
+struct Uni
+{
+	Scene::Transform* transform = nullptr;
+    Scene::Drawable* drawable = nullptr;
+	float radius = 1.0f;
+};
+
 struct PlayMode : Mode {
 	PlayMode();
 	virtual ~PlayMode();
@@ -60,4 +67,12 @@ struct PlayMode : Mode {
 	std::vector<BoxCollider> colliders;
 
 	glm::vec3 resolve_collision(BoxCollider const &box);
+
+	// ----- Uni -----
+	Scene::Drawable *drawable_uni = nullptr;
+	std::vector<Uni> unis;
+	int uniCount = 0;
+
+	void generate_uni(glm::vec3 position);
+	void collect_uni();
 };

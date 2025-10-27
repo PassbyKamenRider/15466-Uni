@@ -12,8 +12,8 @@
 
 #include <random>
 
-const glm::vec3 minBoundary(-20.0f, -30.0f, -15.0f);
-const glm::vec3 maxBoundary( 20.0f,  30.0f,  15.0f);
+// const glm::vec3 minBoundary(-20.0f, -30.0f, -15.0f);
+// const glm::vec3 maxBoundary( 20.0f,  30.0f,  15.0f);
 
 static void request_quit() {
     SDL_Event quit;
@@ -69,6 +69,48 @@ glm::vec3 PlayMode::resolve_collision(BoxCollider const &box)
     return player_pos + box.rotation * push;
 }
 
+void PlayMode::generate_uni(glm::vec3 position)
+{
+	Uni uni;
+
+    Scene::Transform *t = &scene.transforms.emplace_back();
+    t->name = "Uni_Instance";
+    t->position = position;
+	uni.transform = t;
+
+    Scene::Drawable *d = &scene.drawables.emplace_back(t);
+    d->pipeline = drawable_uni->pipeline;
+	uni.drawable = d;
+
+	unis.push_back(uni);
+}
+
+void PlayMode::collect_uni()
+{
+	for (auto it = unis.begin(); it != unis.end();)
+	{
+		float dist = glm::length(player->position - it->transform->position);
+		if (dist < player_radius + it->radius)
+		{
+			auto d_it = std::find_if(
+				scene.drawables.begin(), scene.drawables.end(),
+				[&](Scene::Drawable &d){ return &d == it->drawable; }
+			);
+			
+			scene.drawables.erase(d_it);
+
+			it = unis.erase(it);
+			uniCount++;
+
+			std::cout << "Total Unis collected: " << uniCount << "\n";
+		}
+		else
+		{
+			++it;
+		}
+	}
+}
+
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
 	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
@@ -107,18 +149,24 @@ void PlayMode::end_game() {
 PlayMode::PlayMode() : scene(*hexapod_scene) {
 	for (auto &transform : scene.transforms) {
 		if (transform.name == "Sphere") player = &transform;
-	}
 
-	for (auto &transform : scene.transforms) {
-        if (transform.name.rfind("Collider", 0) == 0)
+		if (transform.name.rfind("Collider", 0) == 0)
 		{
 			BoxCollider box;
 			box.center = transform.position;
 			box.halfSize = transform.scale;
 			box.rotation = glm::mat3_cast(transform.rotation);
 			colliders.push_back(box);
-        }
-    }
+		}
+	}
+
+	for (auto &drawable : scene.drawables)
+	{
+		if (drawable.transform->name == "Uni")
+		{
+			drawable_uni = &drawable;
+		}
+	}
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
@@ -175,7 +223,10 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 				} else if (evt.key.key == SDLK_P) {
 					game_state = GameState::GameOver;
 					return true;
-				} 
+				} else if (evt.key.key == SDLK_U) {
+					generate_uni(player->position + glm::vec3(0.0f, 0.0f, -5.0f));
+					return true;
+				}
 
 				break;
 
@@ -271,7 +322,7 @@ void PlayMode::update(float elapsed) {
 
 		//clamp camera within the boundary
 		//camera->transform->position = glm::clamp(camera->transform->position, minBoundary, maxBoundary);
-		player->position = glm::clamp(player->position, minBoundary, maxBoundary);
+		//player->position = glm::clamp(player->position, minBoundary, maxBoundary);
 		camera->transform->position = glm::vec3(player->position.x, camera->transform->position.y, player->position.z);
 
 		//resolve terrain collisions
@@ -279,6 +330,9 @@ void PlayMode::update(float elapsed) {
 		{
 			player->position = resolve_collision(box);
 		}
+
+		// collect uni
+		collect_uni();
 	}
 
 	{ //update listener to camera position:
