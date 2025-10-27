@@ -15,6 +15,10 @@
 // const glm::vec3 minBoundary(-20.0f, -30.0f, -15.0f);
 // const glm::vec3 maxBoundary( 20.0f,  30.0f,  15.0f);
 
+// for prototype just temporarily put it here
+// will remove in future refactor -- Yifan
+std::vector<glm::vec3> uni_spawnPositions;
+
 static void request_quit() {
     SDL_Event quit;
     quit.type = SDL_EVENT_QUIT;
@@ -122,6 +126,12 @@ Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 	return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
 		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
 
+		if (mesh_name.rfind("SpawnPos", 0) == 0)
+		{
+			uni_spawnPositions.push_back(transform->position);
+			return;
+		}
+
 		scene.drawables.emplace_back(transform);
 		Scene::Drawable &drawable = scene.drawables.back();
 
@@ -147,7 +157,8 @@ void PlayMode::end_game() {
 
 
 PlayMode::PlayMode() : scene(*hexapod_scene) {
-	for (auto &transform : scene.transforms) {
+	for (auto &transform : scene.transforms)
+	{
 		if (transform.name == "Sphere") player = &transform;
 
 		if (transform.name.rfind("Collider", 0) == 0)
@@ -166,6 +177,12 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 		{
 			drawable_uni = &drawable;
 		}
+	}
+
+	// spawn unis
+	for (auto pos : uni_spawnPositions)
+	{
+		generate_uni(pos);
 	}
 
 	//get pointer to camera for convenience:
