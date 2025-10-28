@@ -332,7 +332,7 @@ void PlayMode::update(float elapsed) {
 		glm::mat4x3 frame = camera->transform->make_parent_from_local();
 		glm::vec3 frame_right = frame[0];
 		glm::vec3 frame_up = frame[1];
-		glm::vec3 frame_forward = -frame[2];
+		// glm::vec3 frame_forward = -frame[2];
 
 		camera->transform->position += move.x * frame_right + move.y * frame_up;
 		player->position += move.x * frame_right + move.y * frame_up;
