@@ -18,10 +18,52 @@ struct BoxCollider
     glm::mat3 rotation;
 };
 
+class Player
+{
+  public:
+  	Player() = default;
+	Player(Scene::Transform *transform_);
+	Scene::Transform *transform;
+	glm::vec3 start_position; // const
+	float radius = 1.0f; // const
+	void update_position(float elapsed, glm::vec2 const &input);
+	void resolve_collisions(std::vector<BoxCollider> const &boxes);
+	void dash(glm::vec2 const &input);
+	
+	private:
+	float swim_speed_ = 7.0f; // const
+	float acceleration_ = 10.0f; // const
+	
+	float dash_speed_ = 20.0f; // const
+	float drag_ = 7.0f; // const
+	float dash_cooldown_ = 1.0f; // const
+	float dash_duration_ = 0.2f; // const
+	bool is_dashing_ = false;
+	float dash_speed_curve_(float t) const;
+	float dash_progress_ = 0.0f;
+	float dash_cooldown_timer_ = 0.0f;
+	glm::vec2 dash_direction_ = glm::vec2(0.0f);
+	bool conserve_momentum_ = false;
+
+	glm::vec2 velocity_ = glm::vec2(0.0f);
+	glm::vec2 target_velocity_ = glm::vec2(0.0f);
+};
+
+class FollowCamera
+{
+  public:
+	FollowCamera() = default;
+	FollowCamera(Scene::Transform *transform_, Scene::Transform *target);
+	Scene::Transform *transform;
+	void update_position(float elapsed);
+  private:
+	Scene::Transform *target_;
+};
+
 struct Uni
 {
-	Scene::Transform* transform = nullptr;
-    Scene::Drawable* drawable = nullptr;
+	Scene::Transform *transform = nullptr;
+    Scene::Drawable *drawable = nullptr;
 	float radius = 1.0f;
 };
 
@@ -46,27 +88,23 @@ struct PlayMode : Mode {
     GameState game_state = GameState::Title;
     int score = 0;
 
-    glm::vec3 player_start_pos = glm::vec3(0.0f);
-
 	//input tracking:
 	struct Button {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
 	} left, right, down, up;
 
+	glm::vec2 get_move_input() const;
+
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
 
-	float player_radius = 1.0f;
-	Scene::Transform *player = nullptr; // add pointer to player object
-	
-	//camera:
-	Scene::Camera *camera = nullptr;
+	Player player;
+	FollowCamera virtual_camera;
+	Scene::Camera *camera;
 
 	// ----- collisions -----
 	std::vector<BoxCollider> colliders;
-
-	glm::vec3 resolve_collision(BoxCollider const &box);
 
 	// ----- Uni -----
 	Scene::Drawable *drawable_uni = nullptr;

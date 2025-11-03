@@ -25,96 +25,6 @@ static void request_quit() {
     SDL_PushEvent(&quit);
 }
 
-glm::vec3 PlayMode::resolve_collision(BoxCollider const &box)
-{
-	glm::vec3 player_pos = player->position;
-
-    glm::vec3 local_pos = glm::transpose(box.rotation) * (player_pos - box.center);
-
-    glm::vec3 closest = glm::clamp(local_pos, -box.halfSize, box.halfSize);
-
-    glm::vec3 local_delta = local_pos - closest;
-    float dist2 = glm::dot(local_delta, local_delta);
-
-    if (dist2 > 0.0f)
-    {
-        float dist = std::sqrt(dist2);
-        if (dist < player_radius)
-        {
-            glm::vec3 push_local = (local_delta / dist) * (player_radius - dist);
-            return player_pos + box.rotation * push_local;
-        }
-        return player_pos;
-    }
-
-    glm::vec3 penetration;
-    float min_overlap = std::numeric_limits<float>::max();
-    int axis = -1;
-
-    for (int i = 0; i < 3; ++i)
-    {
-        float dist_to_pos = box.halfSize[i] - local_pos[i];
-        float dist_to_neg = box.halfSize[i] + local_pos[i];
-        float overlap = std::min(dist_to_pos, dist_to_neg);
-        if (overlap < min_overlap)
-        {
-            min_overlap = overlap;
-            axis = i;
-            penetration[i] = (dist_to_pos < dist_to_neg) ? overlap : -overlap;
-        }
-    }
-
-    glm::vec3 push(0.0f);
-    if (axis >= 0)
-	{
-        push[axis] = (penetration[axis] > 0 ? player_radius : -player_radius);
-    }
-
-    return player_pos + box.rotation * push;
-}
-
-void PlayMode::generate_uni(glm::vec3 position)
-{
-	Uni uni;
-
-    Scene::Transform *t = &scene.transforms.emplace_back();
-    t->name = "Uni_Instance";
-    t->position = position;
-	uni.transform = t;
-
-    Scene::Drawable *d = &scene.drawables.emplace_back(t);
-    d->pipeline = drawable_uni->pipeline;
-	uni.drawable = d;
-
-	unis.push_back(uni);
-}
-
-void PlayMode::collect_uni()
-{
-	for (auto it = unis.begin(); it != unis.end();)
-	{
-		float dist = glm::length(player->position - it->transform->position);
-		if (dist < player_radius + it->radius)
-		{
-			auto d_it = std::find_if(
-				scene.drawables.begin(), scene.drawables.end(),
-				[&](Scene::Drawable &d){ return &d == it->drawable; }
-			);
-			
-			scene.drawables.erase(d_it);
-
-			it = unis.erase(it);
-			uniCount++;
-
-			std::cout << "Total Unis collected: " << uniCount << "\n";
-		}
-		else
-		{
-			++it;
-		}
-	}
-}
-
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
 	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
@@ -144,9 +54,180 @@ Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 	});
 });
 
+// - Player --------------------------------------------------------------------
+
+Player::Player(Scene::Transform *transform_)
+	: transform(transform_), start_position(transform_->position)
+{}
+
+float Player::dash_speed_curve_(float t) const
+{ // an ease in-out cubic curve
+	t = glm::clamp(t, 0.0f, 1.0f);
+	return t < 0.5 ? 4 * t * t * t : 1 - glm::pow(-2 * t + 2, 3) / 2;
+}
+
+void Player::dash(glm::vec2 const &input)
+{
+	dash_direction_ = input;
+	if (input != glm::vec2(0.0f) && dash_cooldown_timer_ <= 0.0f) {
+		is_dashing_ = true;
+		conserve_momentum_ = true;
+	}
+}
+
+void Player::update_position(float elapsed, glm::vec2 const &input)
+{
+	if (dash_cooldown_timer_ > 0.0f) { dash_cooldown_timer_ -= elapsed; }
+	if (is_dashing_) {
+		dash_progress_ += elapsed;
+		if (dash_progress_ < dash_duration_) {
+			float t = dash_progress_ / dash_duration_;
+			float speed = dash_speed_ * dash_speed_curve_(t);
+			velocity_ = speed * dash_direction_;
+			transform->position += glm::vec3(velocity_.x, 0.0f, velocity_.y) * elapsed;
+			return;
+		}
+		is_dashing_ = false;
+		dash_progress_ = 0.0f;
+		dash_cooldown_timer_ = dash_cooldown_;
+	}
+
+	target_velocity_ = input * swim_speed_;
+	if (glm::dot(velocity_, velocity_) <= swim_speed_ * swim_speed_) {
+		conserve_momentum_ = false;
+	}
+
+	glm::vec2 delta_v = target_velocity_ - velocity_;
+	if (glm::dot(delta_v, delta_v) < 0.001f) {
+		velocity_ = target_velocity_;
+	} else {
+		float accel = conserve_momentum_ ? drag_ * glm::dot(velocity_, velocity_) / (swim_speed_*swim_speed_) : acceleration_;
+		velocity_ += accel * glm::normalize(delta_v) * elapsed;
+	}
+
+	transform->position += glm::vec3(velocity_.x, 0.0f, velocity_.y) * elapsed;
+}
+
+
+void Player::resolve_collisions(std::vector<BoxCollider> const &boxes)
+{
+	for (auto const &box : boxes)
+	{
+		glm::vec3 local_pos = glm::transpose(box.rotation) * (transform->position - box.center);
+
+		glm::vec3 closest = glm::clamp(local_pos, -box.halfSize, box.halfSize);
+
+		glm::vec3 local_delta = local_pos - closest;
+		float dist2 = glm::dot(local_delta, local_delta);
+		if (dist2 > 0.0f)
+		{
+			float dist = std::sqrt(dist2);
+			if (dist < radius)
+			{
+				glm::vec3 push_local = (local_delta / dist) * (radius - dist);
+				glm::vec3 push = box.rotation * push_local;
+				transform->position += push;
+				// reflect velocity with some energy loss
+				glm::vec2 n = glm::normalize(glm::vec2(push.x, push.z));
+				velocity_ = 0.5f * (velocity_ - 2.0f * glm::dot(velocity_, n) * n);
+			}
+			continue;
+		}
+	
+		glm::vec3 penetration;
+		float min_overlap = std::numeric_limits<float>::max();
+		int axis = -1;
+	
+		for (int i = 0; i < 3; ++i)
+		{
+			float dist_to_pos = box.halfSize[i] - local_pos[i];
+			float dist_to_neg = box.halfSize[i] + local_pos[i];
+			float overlap = std::min(dist_to_pos, dist_to_neg);
+			if (overlap < min_overlap)
+			{
+				min_overlap = overlap;
+				axis = i;
+				penetration[i] = (dist_to_pos < dist_to_neg) ? overlap : -overlap;
+			}
+		}
+	
+		glm::vec3 push_local(0.0f);
+		if (axis >= 0)
+		{
+			push_local[axis] = (penetration[axis] > 0 ? radius : -radius);
+		}
+
+		glm::vec3 push = box.rotation * push_local;
+		transform->position += push;
+		// reflect velocity with some energy loss
+		glm::vec2 n = glm::normalize(glm::vec2(push.x, push.z));
+		velocity_ = 0.5f * (velocity_ - 2.0f * glm::dot(velocity_, n) * n);
+	}
+}
+
+// -----------------------------------------------------------------------------
+
+// - FollowCamera --------------------------------------------------------------
+
+FollowCamera::FollowCamera(Scene::Transform *transform_, Scene::Transform *target)
+	: transform(transform_), target_(target)
+{}
+
+void FollowCamera::update_position(float elapsed)
+{
+	transform->position = glm::vec3(target_->position.x, transform->position.y, target_->position.z);
+}
+
+// -----------------------------------------------------------------------------
+
+void PlayMode::generate_uni(glm::vec3 position)
+{
+	Uni uni;
+
+    Scene::Transform *t = &scene.transforms.emplace_back();
+    t->name = "Uni_Instance";
+    t->position = position;
+	uni.transform = t;
+
+    Scene::Drawable *d = &scene.drawables.emplace_back(t);
+    d->pipeline = drawable_uni->pipeline;
+	uni.drawable = d;
+
+	unis.push_back(uni);
+}
+
+void PlayMode::collect_uni()
+{
+	for (auto it = unis.begin(); it != unis.end();)
+	{
+		float dist = glm::length(player.transform->position - it->transform->position);
+		if (dist < player.radius + it->radius)
+		{
+			auto d_it = std::find_if(
+				scene.drawables.begin(), scene.drawables.end(),
+				[&](Scene::Drawable &d){ return &d == it->drawable; }
+			);
+			
+			scene.drawables.erase(d_it);
+
+			it = unis.erase(it);
+			uniCount++;
+
+			std::cout << "Total Unis collected: " << uniCount << "\n";
+		}
+		else
+		{
+			++it;
+		}
+	}
+}
+
+
+
+
 void PlayMode::reset_game() { //place holder. Can also dump this and just recreate a new gamemode
     score = 0;
-    player->position = player_start_pos;
+    player.transform->position = player.start_position;
     // TODO: reset objects, timer.
     game_state = GameState::Playing;
 }
@@ -155,11 +236,21 @@ void PlayMode::end_game() {
     game_state = GameState::GameOver;
 }
 
+glm::vec2 PlayMode::get_move_input() const {
+	glm::vec2 move = glm::vec2(0.0f);
+	if (left.pressed && !right.pressed) move.x =-1.0f;
+	if (!left.pressed && right.pressed) move.x = 1.0f;
+	if (down.pressed && !up.pressed) move.y =-1.0f;
+	if (!down.pressed && up.pressed) move.y = 1.0f;
+	if (move != glm::vec2(0.0f)) move = glm::normalize(move);
+	return move;
+}
+
 
 PlayMode::PlayMode() : scene(*hexapod_scene) {
 	for (auto &transform : scene.transforms)
 	{
-		if (transform.name == "Sphere") player = &transform;
+		if (transform.name == "Sphere") player = Player(&transform);
 
 		if (transform.name.rfind("Collider", 0) == 0)
 		{
@@ -188,8 +279,8 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
 	camera = &scene.cameras.front();
+	virtual_camera = FollowCamera(camera->transform, player.transform);
 
-	player_start_pos = player->position;
     game_state = GameState::Title; 
 	ui = std::make_unique<UiOverlay>();
 }
@@ -237,11 +328,14 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 					down.downs += 1;
 					down.pressed = true;
 					return true;
+				} else if (evt.key.key == SDLK_SPACE) {
+					player.dash(get_move_input());
+					return true;
 				} else if (evt.key.key == SDLK_P) {
 					game_state = GameState::GameOver;
 					return true;
 				} else if (evt.key.key == SDLK_U) {
-					generate_uni(player->position + glm::vec3(0.0f, 0.0f, -5.0f));
+					generate_uni(player.transform->position + glm::vec3(0.0f, 0.0f, -5.0f));
 					return true;
 				}
 
@@ -316,44 +410,14 @@ void PlayMode::update(float elapsed) {
         return;
     }
 
-	//move camera:
-	{
-		//combine inputs into a move:
-		constexpr float PlayerSpeed = 30.0f;
-		glm::vec2 move = glm::vec2(0.0f);
-		if (left.pressed && !right.pressed) move.x =-1.0f;
-		if (!left.pressed && right.pressed) move.x = 1.0f;
-		if (down.pressed && !up.pressed) move.y =-1.0f;
-		if (!down.pressed && up.pressed) move.y = 1.0f;
+	player.update_position(elapsed, get_move_input());
+	player.resolve_collisions(colliders);
+	virtual_camera.update_position(elapsed);
 
-		//make it so that moving diagonally doesn't go faster:
-		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
-
-		glm::mat4x3 frame = camera->transform->make_parent_from_local();
-		glm::vec3 frame_right = frame[0];
-		glm::vec3 frame_up = frame[1];
-		// glm::vec3 frame_forward = -frame[2];
-
-		camera->transform->position += move.x * frame_right + move.y * frame_up;
-		player->position += move.x * frame_right + move.y * frame_up;
-
-		//clamp camera within the boundary
-		//camera->transform->position = glm::clamp(camera->transform->position, minBoundary, maxBoundary);
-		//player->position = glm::clamp(player->position, minBoundary, maxBoundary);
-		camera->transform->position = glm::vec3(player->position.x, camera->transform->position.y, player->position.z);
-
-		//resolve terrain collisions
-		for (auto const &box : colliders)
-		{
-			player->position = resolve_collision(box);
-		}
-
-		// collect uni
-		collect_uni();
-	}
+	collect_uni();
 
 	{ //update listener to camera position:
-		glm::mat4x3 frame = camera->transform->make_parent_from_local();
+		glm::mat4x3 frame = virtual_camera.transform->make_parent_from_local();
 		glm::vec3 frame_right = frame[0];
 		glm::vec3 frame_at = frame[3];
 		Sound::listener.set_position_right(frame_at, frame_right, 1.0f / 60.0f);
@@ -421,7 +485,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	// }
 
 	if (game_state == GameState::Playing) {
-        ui_model.player_pos = player->position;
+        ui_model.player_pos = player.transform->position;
         ui_model.show_crosshair = true;
         ui->draw(drawable_size, ui_model);
     } else { // Paused
