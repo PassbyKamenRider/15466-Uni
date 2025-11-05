@@ -63,7 +63,7 @@ Player::Player(Scene::Transform *transform_)
 float Player::dash_speed_curve_(float t) const
 { // an ease in-out cubic curve
 	t = glm::clamp(t, 0.0f, 1.0f);
-	return t < 0.5 ? 4 * t * t * t : 1 - glm::pow(-2 * t + 2, 3) / 2;
+	return t < 0.5f ? 4.0f * t * t * t : 1.0f - glm::pow(-2.0f * t + 2.0f, 3.0f) / 2.0f;
 }
 
 void Player::dash(glm::vec2 const &input)
