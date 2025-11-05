@@ -6,6 +6,8 @@
 struct UiModel {
     glm::vec3 player_pos = glm::vec3(0.0f);
     bool show_crosshair = true;
+
+    float time_remaining = -1.0f;
 };
 
 class UiOverlay {

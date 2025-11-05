@@ -78,9 +78,12 @@ struct PlayMode : Mode {
 
 	//----- game state -----
 	enum class GameState { Title, Playing, Paused, GameOver };
-	void end_game();   // 进入 GameOver
-    void reset_game(); // 重新开始
-    void add_score(int delta) { score += delta; } // 可选：加分接口
+	void end_game();
+    void reset_game();
+    void add_score(int delta) { score += delta; }
+
+	float level_time_limit = 45.0f;
+	float time_remaining = 0.0f;
 
 	std::unique_ptr<UiOverlay> ui;
     UiModel ui_model;

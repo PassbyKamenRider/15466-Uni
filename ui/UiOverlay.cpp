@@ -14,6 +14,16 @@ static void make_ortho(float aspect, DrawLines &out) {
     ));
 }
 
+static void draw_centered_text(DrawLines &lines, float aspect, glm::uvec2 drawable_size,
+                               const char* s, float H, float y_ndc) {
+    float ofs = 2.0f / drawable_size.y;
+    float w = 0.6f * H * float(std::strlen(s)); // 近似宽度
+    glm::vec3 pos(-w / aspect * 0.5f, y_ndc, 0.0f);
+    lines.draw_text(s, pos, glm::vec3(H,0,0), glm::vec3(0,H,0), glm::u8vec4(0,0,0,0));
+    lines.draw_text(s, pos + glm::vec3(ofs, ofs, 0.0f),
+        glm::vec3(H,0,0), glm::vec3(0,H,0), glm::u8vec4(0xff,0xff,0xff,0x00));
+}
+
 void UiOverlay::update(float elapsed) {
     if (elapsed > 0.0f) {
         float inst = 1.0f / elapsed;
@@ -45,6 +55,22 @@ void UiOverlay::draw(glm::uvec2 drawable_size, UiModel const& m) {
             glm::u8vec4(0xff,0xff,0xff,0x00));
     }
 
+    // middle: time remaining
+    {
+        if (m.time_remaining >= 0.0f) {
+            int secs = int(m.time_remaining);
+            int mm = secs / 60;
+            int ss = secs % 60;
+    
+            char tbuf[64];
+            std::snprintf(tbuf, sizeof(tbuf), "Time: %d:%02d", mm, ss);
+    
+            constexpr float Htxt = 0.09f;
+            float y_top = 1.0f - 1.5f * Htxt;
+            draw_centered_text(lines, aspect, drawable_size, tbuf, Htxt, y_top);
+        }
+    }
+
     // 右上：FPS + Pos
     {
         char buf[160];
@@ -61,16 +87,6 @@ void UiOverlay::draw(glm::uvec2 drawable_size, UiModel const& m) {
     }
 
     glEnable(GL_DEPTH_TEST);
-}
-
-static void draw_centered_text(DrawLines &lines, float aspect, glm::uvec2 drawable_size,
-                               const char* s, float H, float y_ndc) {
-    float ofs = 2.0f / drawable_size.y;
-    float w = 0.6f * H * float(std::strlen(s)); // 近似宽度
-    glm::vec3 pos(-w / aspect * 0.5f, y_ndc, 0.0f);
-    lines.draw_text(s, pos, glm::vec3(H,0,0), glm::vec3(0,H,0), glm::u8vec4(0,0,0,0));
-    lines.draw_text(s, pos + glm::vec3(ofs, ofs, 0.0f),
-        glm::vec3(H,0,0), glm::vec3(0,H,0), glm::u8vec4(0xff,0xff,0xff,0x00));
 }
 
 void UiOverlay::draw_title(glm::uvec2 drawable_size, const char* title) {

@@ -228,7 +228,7 @@ void PlayMode::collect_uni()
 void PlayMode::reset_game() { //place holder. Can also dump this and just recreate a new gamemode
     score = 0;
     player.transform->position = player.start_position;
-    // TODO: reset objects, timer.
+    time_remaining = level_time_limit;
     game_state = GameState::Playing;
 }
 
@@ -410,6 +410,13 @@ void PlayMode::update(float elapsed) {
         return;
     }
 
+	time_remaining -= elapsed;
+	if (time_remaining <= 0.0f) {
+		time_remaining = 0.0f;
+		end_game();
+		return;
+	}
+
 	player.update_position(elapsed, get_move_input());
 	player.resolve_collisions(colliders);
 	virtual_camera.update_position(elapsed);
@@ -439,7 +446,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
         if (game_state == GameState::Title) ui->draw_title(drawable_size, "Uni");
-        else ui->draw_gameover(drawable_size, score);
+        else ui->draw_gameover(drawable_size, uniCount);
         glEnable(GL_DEPTH_TEST);
         GL_ERRORS();
         return;
@@ -487,6 +494,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	if (game_state == GameState::Playing) {
         ui_model.player_pos = player.transform->position;
         ui_model.show_crosshair = true;
+		ui_model.time_remaining = time_remaining;
         ui->draw(drawable_size, ui_model);
     } else { // Paused
         ui->draw_pause(drawable_size);
