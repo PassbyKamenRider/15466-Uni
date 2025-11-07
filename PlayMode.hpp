@@ -25,12 +25,12 @@ class Player
 	Player(Scene::Transform *transform_);
 	Scene::Transform *transform;
 	glm::vec3 start_position; // const
-	float radius = 1.0f; // const
 	void update_position(float elapsed, glm::vec2 const &input);
 	void resolve_collisions(std::vector<BoxCollider> const &boxes);
 	void dash(glm::vec2 const &input);
 	
 	private:
+	float radius_ = 1.0f; // const
 	float swim_speed_ = 7.0f; // const
 	float acceleration_ = 10.0f; // const
 	
@@ -63,8 +63,26 @@ class FollowCamera
 struct Uni
 {
 	Scene::Transform *transform = nullptr;
-    Scene::Drawable *drawable = nullptr;
-	float radius = 1.0f;
+	std::list< Scene::Drawable >::iterator drawable_idx;
+	float radius = 2.0f;
+};
+
+class UniManager
+{
+  public:
+  UniManager() = default;
+  void spawn_unis(Scene &scene);
+  void clear_unis(Scene &scene);
+  void collect_uni(Scene &scene, glm::vec3 player_position);
+  size_t num_collected = 0;
+
+  Scene::Drawable *uni_prefab = nullptr;
+  std::vector<Scene::Transform *> spawn_transforms;
+  
+  private:
+  std::vector<Uni> unis_;
+  
+  void spawn_uni(Scene &scene, Scene::Transform *transform);
 };
 
 struct PlayMode : Mode {
@@ -80,7 +98,6 @@ struct PlayMode : Mode {
 	enum class GameState { Title, Playing, Paused, GameOver };
 	void end_game();
     void reset_game();
-    void add_score(int delta) { score += delta; }
 
 	float level_time_limit = 45.0f;
 	float time_remaining = 0.0f;
@@ -89,7 +106,6 @@ struct PlayMode : Mode {
     UiModel ui_model;
 
     GameState game_state = GameState::Title;
-    int score = 0;
 
 	//input tracking:
 	struct Button {
@@ -105,15 +121,8 @@ struct PlayMode : Mode {
 	Player player;
 	FollowCamera virtual_camera;
 	Scene::Camera *camera;
+	UniManager uni_manager;
 
 	// ----- collisions -----
 	std::vector<BoxCollider> colliders;
-
-	// ----- Uni -----
-	Scene::Drawable *drawable_uni = nullptr;
-	std::vector<Uni> unis;
-	int uniCount = 0;
-
-	void generate_uni(glm::vec3 position);
-	void collect_uni();
 };

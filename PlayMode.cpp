@@ -12,12 +12,6 @@
 
 #include <random>
 
-// const glm::vec3 minBoundary(-20.0f, -30.0f, -15.0f);
-// const glm::vec3 maxBoundary( 20.0f,  30.0f,  15.0f);
-
-// for prototype just temporarily put it here
-// will remove in future refactor -- Yifan
-std::vector<glm::vec3> uni_spawnPositions;
 
 static void request_quit() {
     SDL_Event quit;
@@ -34,13 +28,11 @@ Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
 
 Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 	return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
-		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
-
-		if (mesh_name.rfind("SpawnPos", 0) == 0)
-		{
-			uni_spawnPositions.push_back(transform->position);
+		// don't add drawables for uni spawn positions, necessary information will be saved later in Scene constructor
+		if (transform->name.rfind("SpawnPos", 0) == 0)
 			return;
-		}
+		
+		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
 		Scene::Drawable &drawable = scene.drawables.back();
@@ -113,55 +105,30 @@ void Player::resolve_collisions(std::vector<BoxCollider> const &boxes)
 {
 	for (auto const &box : boxes)
 	{
-		glm::vec3 local_pos = glm::transpose(box.rotation) * (transform->position - box.center);
+		glm::vec3 diff = transform->position - box.center;
+		float support = box.halfSize.x + box.halfSize.z + radius_;
+		if (glm::abs(diff.x) > support && glm::abs(diff.z) > support)
+			continue;
 
-		glm::vec3 closest = glm::clamp(local_pos, -box.halfSize, box.halfSize);
+		glm::vec3 local_pos3 = glm::transpose(box.rotation) * diff;
+		glm::vec3 closest3 = glm::clamp(local_pos3, -box.halfSize, box.halfSize);
+		
+		glm::vec2 local_pos = glm::vec2(local_pos3.x, local_pos3.z);
+		glm::vec2 closest = glm::vec2(closest3.x, closest3.z);
 
-		glm::vec3 local_delta = local_pos - closest;
+		glm::vec2 local_delta = local_pos - closest;
 		float dist2 = glm::dot(local_delta, local_delta);
-		if (dist2 > 0.0f)
+
+		if (dist2 < radius_ * radius_)
 		{
 			float dist = std::sqrt(dist2);
-			if (dist < radius)
-			{
-				glm::vec3 push_local = (local_delta / dist) * (radius - dist);
-				glm::vec3 push = box.rotation * push_local;
-				transform->position += push;
-				// reflect velocity with some energy loss
-				glm::vec2 n = glm::normalize(glm::vec2(push.x, push.z));
-				velocity_ = 0.5f * (velocity_ - 2.0f * glm::dot(velocity_, n) * n);
-			}
-			continue;
+			glm::vec2 push_local = (local_delta / dist) * (radius_ - dist);
+			glm::vec3 push = box.rotation * glm::vec3(push_local.x, 0.0f, push_local.y);
+			transform->position += push;
+			// reflect velocity with some energy loss
+			glm::vec2 n = glm::normalize(glm::vec2(push.x, push.z));
+			velocity_ = 0.5f * (velocity_ - 2.0f * glm::dot(velocity_, n) * n);
 		}
-	
-		glm::vec3 penetration;
-		float min_overlap = std::numeric_limits<float>::max();
-		int axis = -1;
-	
-		for (int i = 0; i < 3; ++i)
-		{
-			float dist_to_pos = box.halfSize[i] - local_pos[i];
-			float dist_to_neg = box.halfSize[i] + local_pos[i];
-			float overlap = std::min(dist_to_pos, dist_to_neg);
-			if (overlap < min_overlap)
-			{
-				min_overlap = overlap;
-				axis = i;
-				penetration[i] = (dist_to_pos < dist_to_neg) ? overlap : -overlap;
-			}
-		}
-	
-		glm::vec3 push_local(0.0f);
-		if (axis >= 0)
-		{
-			push_local[axis] = (penetration[axis] > 0 ? radius : -radius);
-		}
-
-		glm::vec3 push = box.rotation * push_local;
-		transform->position += push;
-		// reflect velocity with some energy loss
-		glm::vec2 n = glm::normalize(glm::vec2(push.x, push.z));
-		velocity_ = 0.5f * (velocity_ - 2.0f * glm::dot(velocity_, n) * n);
 	}
 }
 
@@ -180,40 +147,53 @@ void FollowCamera::update_position(float elapsed)
 
 // -----------------------------------------------------------------------------
 
-void PlayMode::generate_uni(glm::vec3 position)
+// - UniManager ----------------------------------------------------------------
+
+void UniManager::spawn_uni(Scene &scene, Scene::Transform *transform)
 {
 	Uni uni;
 
-    Scene::Transform *t = &scene.transforms.emplace_back();
-    t->name = "Uni_Instance";
-    t->position = position;
-	uni.transform = t;
+	uni.transform = transform;
 
-    Scene::Drawable *d = &scene.drawables.emplace_back(t);
-    d->pipeline = drawable_uni->pipeline;
-	uni.drawable = d;
+    Scene::Drawable *d = &scene.drawables.emplace_back(transform);
+    d->pipeline = uni_prefab->pipeline;
+	uni.drawable_idx = std::prev(scene.drawables.end());
 
-	unis.push_back(uni);
+	unis_.push_back(uni);
 }
 
-void PlayMode::collect_uni()
+void UniManager::spawn_unis(Scene &scene)
 {
-	for (auto it = unis.begin(); it != unis.end();)
+	for (auto & t : spawn_transforms)
 	{
-		float dist = glm::length(player.transform->position - it->transform->position);
-		if (dist < player.radius + it->radius)
+		spawn_uni(scene, t);
+	}
+}
+
+void UniManager::clear_unis(Scene &scene)
+{
+	for (auto & uni : unis_)
+	{
+		scene.drawables.erase(uni.drawable_idx);
+	}
+	unis_.clear();
+	num_collected = 0;
+}
+
+void UniManager::collect_uni(Scene &scene, glm::vec3 player_position)
+{
+	for (auto it = unis_.begin(); it != unis_.end();)
+	{
+		float dist = glm::length(player_position - it->transform->position);
+		if (dist < it->radius)
 		{
-			auto d_it = std::find_if(
-				scene.drawables.begin(), scene.drawables.end(),
-				[&](Scene::Drawable &d){ return &d == it->drawable; }
-			);
-			
-			scene.drawables.erase(d_it);
+			scene.drawables.erase(it->drawable_idx);
 
-			it = unis.erase(it);
-			uniCount++;
+			it = unis_.erase(it);
+			num_collected++;
 
-			std::cout << "Total Unis collected: " << uniCount << "\n";
+			std::cout << "Total Unis collected: " << num_collected << "\n";
+			break;
 		}
 		else
 		{
@@ -222,12 +202,14 @@ void PlayMode::collect_uni()
 	}
 }
 
+// -----------------------------------------------------------------------------
 
-
+// - PlayMode helpers ----------------------------------------------------------
 
 void PlayMode::reset_game() { //place holder. Can also dump this and just recreate a new gamemode
-    score = 0;
     player.transform->position = player.start_position;
+	uni_manager.clear_unis(scene);
+	uni_manager.spawn_unis(scene);
     time_remaining = level_time_limit;
     game_state = GameState::Playing;
 }
@@ -246,35 +228,39 @@ glm::vec2 PlayMode::get_move_input() const {
 	return move;
 }
 
+// -----------------------------------------------------------------------------
+
+// - PlayMode main -------------------------------------------------------------
 
 PlayMode::PlayMode() : scene(*hexapod_scene) {
+	for (auto &drawable : scene.drawables)
+	{
+		if (drawable.transform->name == "Uni")
+		{
+			uni_manager.uni_prefab = &drawable;
+			break;
+		}
+	}
+
 	for (auto &transform : scene.transforms)
 	{
-		if (transform.name == "Sphere") player = Player(&transform);
-
-		if (transform.name.rfind("Collider", 0) == 0)
+		if (transform.name == "Sphere") {
+			player = Player(&transform);
+		} else if (transform.name.rfind("Collider", 0) == 0)
 		{
 			BoxCollider box;
 			box.center = transform.position;
 			box.halfSize = transform.scale;
 			box.rotation = glm::mat3_cast(transform.rotation);
 			colliders.push_back(box);
-		}
-	}
-
-	for (auto &drawable : scene.drawables)
-	{
-		if (drawable.transform->name == "Uni")
+		} else if (transform.name.rfind("SpawnPos", 0) == 0)
 		{
-			drawable_uni = &drawable;
+			uni_manager.spawn_transforms.push_back(&transform);
 		}
 	}
 
 	// spawn unis
-	for (auto pos : uni_spawnPositions)
-	{
-		generate_uni(pos);
-	}
+	uni_manager.spawn_unis(scene);
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
@@ -333,9 +319,6 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 					return true;
 				} else if (evt.key.key == SDLK_P) {
 					game_state = GameState::GameOver;
-					return true;
-				} else if (evt.key.key == SDLK_U) {
-					generate_uni(player.transform->position + glm::vec3(0.0f, 0.0f, -5.0f));
 					return true;
 				}
 
@@ -421,7 +404,7 @@ void PlayMode::update(float elapsed) {
 	player.resolve_collisions(colliders);
 	virtual_camera.update_position(elapsed);
 
-	collect_uni();
+	uni_manager.collect_uni(scene, player.transform->position);
 
 	{ //update listener to camera position:
 		glm::mat4x3 frame = virtual_camera.transform->make_parent_from_local();
@@ -446,7 +429,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
         if (game_state == GameState::Title) ui->draw_title(drawable_size, "Uni");
-        else ui->draw_gameover(drawable_size, uniCount);
+        else ui->draw_gameover(drawable_size, uni_manager.num_collected);
         glEnable(GL_DEPTH_TEST);
         GL_ERRORS();
         return;
