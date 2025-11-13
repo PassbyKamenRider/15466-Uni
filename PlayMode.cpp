@@ -101,7 +101,7 @@ void Player::update_position(float elapsed, glm::vec2 const &input)
 }
 
 
-void Player::resolve_collisions(std::vector<BoxCollider> const &boxes)
+void Player::resolve_collisions(std::vector<BoxCollider> const &boxes, std::vector<TriggerCollider> &triggers)
 {
 	for (auto const &box : boxes)
 	{
@@ -130,6 +130,33 @@ void Player::resolve_collisions(std::vector<BoxCollider> const &boxes)
 			velocity_ = 0.5f * (velocity_ - 2.0f * glm::dot(velocity_, n) * n);
 		}
 	}
+
+	for (auto &trigger : triggers)
+	{
+        glm::vec3 diff = transform->position - trigger.center;
+		float support = trigger.halfSize.x + trigger.halfSize.z + radius_;
+		if (glm::abs(diff.x) > support && glm::abs(diff.z) > support)
+			continue;
+
+		glm::vec3 local_pos3 = glm::transpose(trigger.rotation) * diff;
+		glm::vec3 closest3 = glm::clamp(local_pos3, -trigger.halfSize, trigger.halfSize);
+
+		glm::vec2 local_pos = glm::vec2(local_pos3.x, local_pos3.z);
+		glm::vec2 closest = glm::vec2(closest3.x, closest3.z);
+
+		glm::vec2 local_delta = local_pos - closest;
+		float dist2 = glm::dot(local_delta, local_delta);
+
+		bool overlap = dist2 < radius_ * radius_;
+
+        if (overlap && !trigger.is_triggered) {
+            trigger.is_triggered = true;
+            trigger.drawable_idx->pipeline = {};
+        } else if (!overlap && trigger.is_triggered) {
+            trigger.is_triggered = false;
+            trigger.drawable_idx->pipeline = trigger.backup_pipeline;
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -233,12 +260,20 @@ glm::vec2 PlayMode::get_move_input() const {
 // - PlayMode main -------------------------------------------------------------
 
 PlayMode::PlayMode() : scene(*hexapod_scene) {
-	for (auto &drawable : scene.drawables)
+	for (auto drawable_it = scene.drawables.begin(); drawable_it != scene.drawables.end(); ++drawable_it)
 	{
+		Scene::Drawable &drawable = *drawable_it;
 		if (drawable.transform->name == "Uni")
 		{
 			uni_manager.uni_prefab = &drawable;
-			break;
+		} else if (drawable.transform->name.rfind("SecretRoom", 0) == 0) {
+			TriggerCollider trigger;
+			trigger.center = drawable.transform->position;
+			trigger.halfSize = drawable.transform->scale;
+			trigger.rotation = glm::mat3_cast(drawable.transform->rotation);
+			trigger.drawable_idx = drawable_it;
+			trigger.backup_pipeline = drawable_it->pipeline;
+			triggers.push_back(trigger);
 		}
 	}
 
@@ -362,6 +397,13 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 		}
 		
 	} else if (evt.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+
+		if (game_state == GameState::Playing) {
+			// handle player attack
+			std::cout << "Player attack!\n";
+			return true;
+		}
+
 		if (SDL_GetWindowRelativeMouseMode(Mode::window) == false) {
 			SDL_SetWindowRelativeMouseMode(Mode::window, true);
 			return true;
@@ -401,7 +443,7 @@ void PlayMode::update(float elapsed) {
 	}
 
 	player.update_position(elapsed, get_move_input());
-	player.resolve_collisions(colliders);
+	player.resolve_collisions(colliders, triggers);
 	virtual_camera.update_position(elapsed);
 
 	uni_manager.collect_uni(scene, player.transform->position);
@@ -429,7 +471,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
         if (game_state == GameState::Title) ui->draw_title(drawable_size, "Uni");
-        else ui->draw_gameover(drawable_size, uni_manager.num_collected);
+        else ui->draw_gameover(drawable_size, (int) uni_manager.num_collected);
         glEnable(GL_DEPTH_TEST);
         GL_ERRORS();
         return;

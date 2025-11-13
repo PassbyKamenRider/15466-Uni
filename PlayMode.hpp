@@ -18,6 +18,15 @@ struct BoxCollider
     glm::mat3 rotation;
 };
 
+struct TriggerCollider {
+    glm::vec3 center;
+    glm::vec3 halfSize;
+    glm::mat3 rotation;
+    std::list<Scene::Drawable>::iterator drawable_idx;
+	Scene::Drawable::Pipeline backup_pipeline;
+    bool is_triggered = false;
+};
+
 class Player
 {
   public:
@@ -26,7 +35,7 @@ class Player
 	Scene::Transform *transform;
 	glm::vec3 start_position; // const
 	void update_position(float elapsed, glm::vec2 const &input);
-	void resolve_collisions(std::vector<BoxCollider> const &boxes);
+	void resolve_collisions(std::vector<BoxCollider> const &boxes, std::vector<TriggerCollider> &triggers);
 	void dash(glm::vec2 const &input);
 	
 	private:
@@ -125,4 +134,5 @@ struct PlayMode : Mode {
 
 	// ----- collisions -----
 	std::vector<BoxCollider> colliders;
+	std::vector<TriggerCollider> triggers;
 };
