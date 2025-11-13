@@ -69,6 +69,14 @@ void Player::dash(glm::vec2 const &input)
 
 void Player::update_position(float elapsed, glm::vec2 const &input)
 {
+	if (input.x > 0.01f && !is_facing_right_) {
+		attack_range_.center.x = -attack_range_.center.x;
+		is_facing_right_ = true;
+	} else if (input.x < -0.01f && is_facing_right_) {
+		attack_range_.center.x = -attack_range_.center.x;
+		is_facing_right_ = false;
+	}
+
 	if (dash_cooldown_timer_ > 0.0f) { dash_cooldown_timer_ -= elapsed; }
 	if (is_dashing_) {
 		dash_progress_ += elapsed;
@@ -207,12 +215,27 @@ void UniManager::clear_unis(Scene &scene)
 	num_collected = 0;
 }
 
-void UniManager::collect_uni(Scene &scene, glm::vec3 player_position)
+void UniManager::collect_uni(Scene &scene, glm::vec3 player_position, BoxCollider const &attackRange)
 {
+	glm::vec3 attack_center_world = player_position + attackRange.center;
+
 	for (auto it = unis_.begin(); it != unis_.end();)
 	{
-		float dist = glm::length(player_position - it->transform->position);
-		if (dist < it->radius)
+		glm::vec3 diff = it->transform->position - attack_center_world;
+
+        glm::vec2 diff2D(diff.x, diff.z);
+        glm::mat2 rot2 = glm::mat2(attackRange.rotation[0].x, attackRange.rotation[0].z,
+                                   attackRange.rotation[2].x, attackRange.rotation[2].z);
+        glm::vec2 local_pos = glm::transpose(rot2) * diff2D;
+
+        glm::vec2 halfSize2D(attackRange.halfSize.x, attackRange.halfSize.z);
+        glm::vec2 closest = glm::clamp(local_pos, -halfSize2D, halfSize2D);
+
+        glm::vec2 delta = local_pos - closest;
+        float dist2 = glm::dot(delta, delta);
+        bool overlap = dist2 < it->radius * it->radius;
+
+		if (overlap)
 		{
 			scene.drawables.erase(it->drawable_idx);
 
@@ -220,7 +243,7 @@ void UniManager::collect_uni(Scene &scene, glm::vec3 player_position)
 			num_collected++;
 
 			std::cout << "Total Unis collected: " << num_collected << "\n";
-			break;
+			//break;
 		}
 		else
 		{
@@ -291,6 +314,13 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 		} else if (transform.name.rfind("SpawnPos", 0) == 0)
 		{
 			uni_manager.spawn_transforms.push_back(&transform);
+		} else if (transform.name.rfind("AttackRange", 0) == 0)
+		{
+			BoxCollider box;
+			box.center = transform.position - player.transform->position;
+			box.halfSize = transform.scale;
+			box.rotation = glm::mat3_cast(transform.rotation);
+			player.attack_range_ = box;
 		}
 	}
 
@@ -400,14 +430,14 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 
 		if (game_state == GameState::Playing) {
 			// handle player attack
-			std::cout << "Player attack!\n";
+			uni_manager.collect_uni(scene, player.transform->position, player.attack_range_);
 			return true;
 		}
 
-		if (SDL_GetWindowRelativeMouseMode(Mode::window) == false) {
-			SDL_SetWindowRelativeMouseMode(Mode::window, true);
-			return true;
-		}
+		// if (SDL_GetWindowRelativeMouseMode(Mode::window) == false) {
+		// 	SDL_SetWindowRelativeMouseMode(Mode::window, true);
+		// 	return true;
+		// }
 	} else if (evt.type == SDL_EVENT_MOUSE_MOTION) {
 		// if (SDL_GetWindowRelativeMouseMode(Mode::window) == true) {
 		// 	glm::vec2 motion = glm::vec2(
@@ -446,7 +476,7 @@ void PlayMode::update(float elapsed) {
 	player.resolve_collisions(colliders, triggers);
 	virtual_camera.update_position(elapsed);
 
-	uni_manager.collect_uni(scene, player.transform->position);
+	//uni_manager.collect_uni(scene, player.transform->position, player.attack_range_);
 
 	{ //update listener to camera position:
 		glm::mat4x3 frame = virtual_camera.transform->make_parent_from_local();

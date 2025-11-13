@@ -34,6 +34,7 @@ class Player
 	Player(Scene::Transform *transform_);
 	Scene::Transform *transform;
 	glm::vec3 start_position; // const
+	BoxCollider attack_range_;
 	void update_position(float elapsed, glm::vec2 const &input);
 	void resolve_collisions(std::vector<BoxCollider> const &boxes, std::vector<TriggerCollider> &triggers);
 	void dash(glm::vec2 const &input);
@@ -53,6 +54,7 @@ class Player
 	float dash_cooldown_timer_ = 0.0f;
 	glm::vec2 dash_direction_ = glm::vec2(0.0f);
 	bool conserve_momentum_ = false;
+	bool is_facing_right_ = true;
 
 	glm::vec2 velocity_ = glm::vec2(0.0f);
 	glm::vec2 target_velocity_ = glm::vec2(0.0f);
@@ -82,7 +84,7 @@ class UniManager
   UniManager() = default;
   void spawn_unis(Scene &scene);
   void clear_unis(Scene &scene);
-  void collect_uni(Scene &scene, glm::vec3 player_position);
+  void collect_uni(Scene &scene, glm::vec3 player_position, BoxCollider const &attackRange);
   size_t num_collected = 0;
 
   Scene::Drawable *uni_prefab = nullptr;
