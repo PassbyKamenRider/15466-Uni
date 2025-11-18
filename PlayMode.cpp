@@ -69,14 +69,6 @@ void Player::dash(glm::vec2 const &input)
 
 void Player::update_position(float elapsed, glm::vec2 const &input)
 {
-	if (input.x > 0.01f && !is_facing_right_) {
-		attack_range_.center.x = -attack_range_.center.x;
-		is_facing_right_ = true;
-	} else if (input.x < -0.01f && is_facing_right_) {
-		attack_range_.center.x = -attack_range_.center.x;
-		is_facing_right_ = false;
-	}
-
 	if (dash_cooldown_timer_ > 0.0f) { dash_cooldown_timer_ -= elapsed; }
 	if (is_dashing_) {
 		dash_progress_ += elapsed;
@@ -321,6 +313,7 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 			box.halfSize = transform.scale;
 			box.rotation = glm::mat3_cast(transform.rotation);
 			player.attack_range_ = box;
+			player.attack_base_offset = box.center;
 		}
 	}
 
@@ -429,26 +422,46 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 	} else if (evt.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
 
 		if (game_state == GameState::Playing) {
-			// handle player attack
+			float mx, my;
+			SDL_GetMouseState(&mx, &my);
+
+			float win_w = float(window_size.x);
+			float win_h = float(window_size.y);
+
+			float ndc_x =  (mx / win_w) * 2.0f - 1.0f;
+			float ndc_y = -(my / win_h) * 2.0f + 1.0f;
+			glm::vec4 clip(ndc_x, ndc_y, -1.0f, 1.0f);
+
+			glm::mat4 proj = camera->make_projection();
+			glm::mat4 view = glm::mat4(camera->transform->make_local_from_world());
+			glm::mat4 inv_vp = glm::inverse(proj * view);
+
+			glm::vec4 world4 = inv_vp * clip;
+			world4 /= world4.w;
+
+			glm::vec3 target_world_position = glm::vec3(world4);
+			target_world_position.y = player.transform->position.y;
+
+			glm::vec3 diff = target_world_position - player.transform->position;
+			glm::vec2 dir  = glm::normalize(glm::vec2(diff.x, diff.z));
+
+			float c = dir.x;
+			float s = dir.y;
+
+			player.attack_range_.rotation = glm::mat3(
+				glm::vec3( c, 0.0f, s ),
+				glm::vec3( 0.0f, 1.0f,  0.0f ),
+				glm::vec3( s, 0.0f,  -c )
+			);
+
+			player.attack_range_.center = player.attack_range_.rotation * player.attack_base_offset;
+
 			uni_manager.collect_uni(scene, player.transform->position, player.attack_range_);
 			return true;
 		}
 
 		// if (SDL_GetWindowRelativeMouseMode(Mode::window) == false) {
 		// 	SDL_SetWindowRelativeMouseMode(Mode::window, true);
-		// 	return true;
-		// }
-	} else if (evt.type == SDL_EVENT_MOUSE_MOTION) {
-		// if (SDL_GetWindowRelativeMouseMode(Mode::window) == true) {
-		// 	glm::vec2 motion = glm::vec2(
-		// 		evt.motion.xrel / float(window_size.y),
-		// 		evt.motion.yrel / float(window_size.y)
-		// 	);
-		// 	camera->transform->rotation = glm::normalize(
-		// 		glm::angleAxis(-motion.x * camera->fovy, glm::vec3(0.0f, 0.0f, 1.0f))
-		// 		* camera->transform->rotation
-		// 		* glm::angleAxis(-motion.y * camera->fovy, glm::vec3(1.0f, 0.0f, 0.0f))
-		// 	);
 		// 	return true;
 		// }
 	}
@@ -523,28 +536,6 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glDepthFunc(GL_LESS); //this is the default depth comparison function, but FYI you can change it.
 
 	scene.draw(*camera);
-
-	// { //use DrawLines to overlay some text:
-	// 	glDisable(GL_DEPTH_TEST);
-	// 	float aspect = float(drawable_size.x) / float(drawable_size.y);
-	// 	DrawLines lines(glm::mat4(
-	// 		1.0f / aspect, 0.0f, 0.0f, 0.0f,
-	// 		0.0f, 1.0f, 0.0f, 0.0f,
-	// 		0.0f, 0.0f, 1.0f, 0.0f,
-	// 		0.0f, 0.0f, 0.0f, 1.0f
-	// 	));
-
-	// 	constexpr float H = 0.09f;
-	// 	lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-	// 		glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
-	// 		glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-	// 		glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-	// 	float ofs = 2.0f / drawable_size.y;
-	// 	lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-	// 		glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
-	// 		glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-	// 		glm::u8vec4(0xff, 0xff, 0xff, 0x00));
-	// }
 
 	if (game_state == GameState::Playing) {
         ui_model.player_pos = player.transform->position;

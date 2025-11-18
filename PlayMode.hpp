@@ -35,6 +35,7 @@ class Player
 	Scene::Transform *transform;
 	glm::vec3 start_position; // const
 	BoxCollider attack_range_;
+	glm::vec3 attack_base_offset;
 	void update_position(float elapsed, glm::vec2 const &input);
 	void resolve_collisions(std::vector<BoxCollider> const &boxes, std::vector<TriggerCollider> &triggers);
 	void dash(glm::vec2 const &input);
@@ -54,7 +55,6 @@ class Player
 	float dash_cooldown_timer_ = 0.0f;
 	glm::vec2 dash_direction_ = glm::vec2(0.0f);
 	bool conserve_momentum_ = false;
-	bool is_facing_right_ = true;
 
 	glm::vec2 velocity_ = glm::vec2(0.0f);
 	glm::vec2 target_velocity_ = glm::vec2(0.0f);
