@@ -187,7 +187,7 @@ struct DoFBlurXProgram {
 		glUniform1f(glGetUniformLocation(program, "nearClip"), NEAR_CLIP);
 		glUniform1f(glGetUniformLocation(program, "farClip"), FAR_CLIP);
 		glUniform1f(glGetUniformLocation(program, "focalDistance"), FOCAL_DISTANCE);
-		glUniform1i(glGetUniformLocation(program, "blurScale"), BLUR_SCALE);
+		glUniform1f(glGetUniformLocation(program, "blurScale"), BLUR_SCALE);
 		glUniform1f(glGetUniformLocation(program, "blurMax"), BLUR_RADIUS_MAX);
 
 		glUseProgram(0);
@@ -294,7 +294,7 @@ struct DoFBlurYProgram {
 		glUniform1f(glGetUniformLocation(program, "nearClip"), NEAR_CLIP);
 		glUniform1f(glGetUniformLocation(program, "farClip"), FAR_CLIP);
 		glUniform1f(glGetUniformLocation(program, "focalDistance"), FOCAL_DISTANCE);
-		glUniform1i(glGetUniformLocation(program, "blurScale"), BLUR_SCALE);
+		glUniform1f(glGetUniformLocation(program, "blurScale"), BLUR_SCALE);
 		glUniform1f(glGetUniformLocation(program, "blurMax"), BLUR_RADIUS_MAX);
 
 		glUseProgram(0);

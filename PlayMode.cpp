@@ -660,7 +660,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
         if (game_state == GameState::Title) {
-			init_intro_program();               // 复用 intro 的简单 program
+			init_intro_program();
 			glUseProgram(intro_program);
 	
 			glm::mat4 I(1.0f);
@@ -671,7 +671,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			glBindTexture(GL_TEXTURE_2D, title_tex);
 			if (intro_tex_sampler >= 0) glUniform1i(intro_tex_sampler, 0);
 	
-			glBindVertexArray(intro_vao);       // 复用同一个全屏 quad
+			glBindVertexArray(intro_vao);
 			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 			glBindVertexArray(0);
 	
