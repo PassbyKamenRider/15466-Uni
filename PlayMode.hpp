@@ -120,6 +120,8 @@ struct PlayMode : Mode {
 
     GameState game_state = GameState::Title;
 
+	GLuint title_tex = 0;
+
 	// ----- intro screens -----
 	std::array<GLuint, 4> intro_tex = {0,0,0,0}; // p1~p4
 	int intro_idx = 0;

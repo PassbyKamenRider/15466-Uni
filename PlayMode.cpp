@@ -393,6 +393,7 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
     game_state = GameState::Title;
     ui = std::make_unique<UiOverlay>();
 
+	title_tex = load_texture_2d("title_screen.png");
     // ---- intro: load textures ----
     intro_tex[0] = load_texture_2d("p1.png");
     intro_tex[1] = load_texture_2d("p2.png");
@@ -459,6 +460,7 @@ PlayMode::~PlayMode() {
     if (intro_ebo) glDeleteBuffers(1, &intro_ebo);
     if (intro_vbo) glDeleteBuffers(1, &intro_vbo);
     if (intro_vao) glDeleteVertexArrays(1, &intro_vao);
+	if (title_tex) glDeleteTextures(1, &title_tex);
 }
 
 bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
@@ -654,8 +656,28 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
         glClearColor(0.0f,0.0f,0.0f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
-        if (game_state == GameState::Title) ui->draw_title(drawable_size, "Uni");
-        else ui->draw_gameover(drawable_size, (int) uni_manager.num_collected);
+        if (game_state == GameState::Title) {
+			init_intro_program();               // 复用 intro 的简单 program
+			glUseProgram(intro_program);
+	
+			glm::mat4 I(1.0f);
+			if (intro_object_to_clip >= 0)
+				glUniformMatrix4fv(intro_object_to_clip, 1, GL_FALSE, glm::value_ptr(I));
+	
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, title_tex);
+			if (intro_tex_sampler >= 0) glUniform1i(intro_tex_sampler, 0);
+	
+			glBindVertexArray(intro_vao);       // 复用同一个全屏 quad
+			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+			glBindVertexArray(0);
+	
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glUseProgram(0);
+		}
+		else {
+			ui->draw_gameover(drawable_size, (int)uni_manager.num_collected);
+		}
         glEnable(GL_DEPTH_TEST);
         GL_ERRORS();
         return;
