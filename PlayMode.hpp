@@ -7,9 +7,11 @@
 
 #include <vector>
 #include <deque>
+#include <array>
 
 #include <memory>
 #include "ui/UiOverlay.hpp"
+#include "Mesh.hpp"
 
 struct BoxCollider
 {
@@ -106,7 +108,7 @@ struct PlayMode : Mode {
 	virtual void draw(glm::uvec2 const &drawable_size) override;
 
 	//----- game state -----
-	enum class GameState { Title, Playing, Paused, GameOver };
+	enum class GameState { Title, Intro, Playing, Paused, GameOver };
 	void end_game();
     void reset_game();
 
@@ -118,6 +120,14 @@ struct PlayMode : Mode {
 
     GameState game_state = GameState::Title;
 
+	// ----- intro screens -----
+	std::array<GLuint, 4> intro_tex = {0,0,0,0}; // p1~p4
+	int intro_idx = 0;
+
+	GLuint intro_vao = 0;
+	GLuint intro_vbo = 0;
+	GLuint intro_ebo = 0;
+	
 	//input tracking:
 	struct Button {
 		uint8_t downs = 0;
