@@ -74,7 +74,8 @@ glm::mat4x3 Scene::Transform::make_local_from_world() const {
 //-------------------------
 
 glm::mat4 Scene::Camera::make_projection() const {
-	return glm::infinitePerspective( fovy, aspect, near );
+	// hard coded the clip planes for now
+	return glm::perspective(fovy, aspect, 0.01f, 55.0f);
 }
 
 //-------------------------

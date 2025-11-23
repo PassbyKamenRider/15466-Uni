@@ -1,6 +1,7 @@
 #include "PlayMode.hpp"
 
 #include "LitColorTextureProgram.hpp"
+#include "Framebuffers.hpp"
 #include "load_save_png.hpp"
 #include "gl_compile_program.hpp"
 
@@ -614,6 +615,8 @@ void PlayMode::update(float elapsed) {
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {
+	framebuffers.realloc(drawable_size);
+
     camera->aspect = float(drawable_size.x) / float(drawable_size.y);
 
     // ---- Intro ----
@@ -689,6 +692,9 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
     glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
     glUseProgram(0);
 
+	//---- draw scene to framebuffer ----
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffers.main_fb);
+
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     glClearDepth(1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -696,7 +702,11 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
-    scene.draw(*camera);
+	scene.draw(*camera);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	framebuffers.dof_blur();
+
 
     if (game_state == GameState::Playing) {
         ui_model.player_pos = player.transform->position;
