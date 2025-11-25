@@ -20,7 +20,8 @@ struct BoxCollider
     glm::mat3 rotation;
 };
 
-struct TriggerCollider {
+struct TriggerCollider
+{
     glm::vec3 center;
     glm::vec3 halfSize;
     glm::mat3 rotation;
@@ -29,18 +30,25 @@ struct TriggerCollider {
     bool is_triggered = false;
 };
 
+struct PlayerPartInfo
+{
+	Scene::Transform* transform;
+    glm::vec3 local_offset;
+    glm::quat local_rotation;
+};
+
 class Player
 {
   public:
   	Player() = default;
 	Player(Scene::Transform *transform_);
 	Scene::Transform *transform;
-	std::vector<Scene::Transform *> part_transforms;
-	std::vector<glm::vec3> part_local_offsets;
+	std::vector<PlayerPartInfo> parts;
 	glm::vec3 start_position; // const
 	BoxCollider attack_range_;
 	glm::vec3 attack_base_offset;
 	void update_position(float elapsed, glm::vec2 const &input);
+	void rotate_player(float angle);
 	void resolve_collisions(std::vector<BoxCollider> const &boxes, std::vector<TriggerCollider> &triggers);
 	void dash(glm::vec2 const &input);
 	void reset_player_speed();

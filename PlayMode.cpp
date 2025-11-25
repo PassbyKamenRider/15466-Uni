@@ -168,12 +168,25 @@ void Player::update_position(float elapsed, glm::vec2 const &input)
     }
 
     transform->position += glm::vec3(velocity_.x, 0.0f, velocity_.y) * elapsed;
+
     glm::mat3 body_rot = glm::mat3_cast(transform->rotation);
-    for (size_t i = 0; i < part_transforms.size(); ++i)
+    for (size_t i = 0; i < parts.size(); ++i)
     {
-        Scene::Transform *part = part_transforms[i];
-        glm::vec3 world_pos = transform->position + body_rot * part_local_offsets[i];
-        part->position = world_pos;
+        Scene::Transform *part_transform = parts[i].transform;
+        glm::vec3 world_pos = transform->position + body_rot * parts[i].local_offset;
+        part_transform->position = world_pos;
+    }
+}
+
+void Player::rotate_player(float angle)
+{
+    glm::quat delta = glm::angleAxis(glm::radians(angle), glm::vec3(0,0,1));
+    transform->rotation = delta * transform->rotation;
+
+    for (auto &p : parts)
+    {
+        p.transform->position = transform->position + transform->rotation * p.local_offset;
+        p.transform->rotation = transform->rotation * p.local_rotation;
     }
 }
 
@@ -371,34 +384,33 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
         }
     }
 
+    for (auto &drawable : scene.drawables)
+    {
+        if (drawable.transform->name.rfind("Playerr", 0) == 0)
+        {
+            player = Player(drawable.transform);
+            drawable.pipeline = {};
+            break;
+        }
+    }
+
     for (auto &transform : scene.transforms)
     {
-        if (transform.name.rfind("body", 0) == 0) {
-            player.transform = &transform;
-        } else if (transform.name.rfind("backpack", 0) == 0)
+        if (transform.name.rfind("backpack", 0) == 0 || 
+                   transform.name.rfind("Circle", 0) == 0 ||
+                   transform.name.rfind("Cube", 0) == 0 ||
+                   transform.name.rfind("goggles", 0) == 0 ||
+                   transform.name.rfind("head", 0) == 0 ||
+                   transform.name.rfind("mouthpiece", 0) == 0 ||
+                   transform.name.rfind("pipe", 0) == 0 ||
+                   transform.name.rfind("Rake", 0) == 0 ||
+                   transform.name.rfind("body", 0) == 0)
         {
-            player.part_transforms.push_back(&transform);
-        } else if (transform.name.rfind("Circle", 0) == 0)
-        {
-            player.part_transforms.push_back(&transform);
-        }  else if (transform.name.rfind("Cube", 0) == 0)
-        {
-            player.part_transforms.push_back(&transform);
-        } else if (transform.name.rfind("goggles", 0) == 0)
-        {
-            player.part_transforms.push_back(&transform);
-        } else if (transform.name.rfind("head", 0) == 0)
-        {
-            player.part_transforms.push_back(&transform);
-        } else if (transform.name.rfind("mouthpiece", 0) == 0)
-        {
-            player.part_transforms.push_back(&transform);
-        } else if (transform.name.rfind("pipe", 0) == 0)
-        {
-            player.part_transforms.push_back(&transform);
-        } else if (transform.name.rfind("Rake", 0) == 0)
-        {
-            player.part_transforms.push_back(&transform);
+            PlayerPartInfo info;
+            info.transform = &transform;
+            info.local_offset = transform.position - player.transform->position;
+            info.local_rotation = glm::inverse(player.transform->rotation) * transform.rotation;
+            player.parts.push_back(info);
         }
         else if (transform.name.rfind("Collider", 0) == 0)
         {
@@ -419,15 +431,6 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
             player.attack_range_ = box;
             player.attack_base_offset = box.center;
         }
-    }
-
-    // save local offsets for player parts
-    glm::mat3 body_rot = glm::mat3_cast(player.transform->rotation);
-    for (auto part : player.part_transforms)
-    {
-        glm::vec3 delta = part->position - player.transform->position;
-        glm::vec3 local_offset = glm::transpose(body_rot) * delta;
-        player.part_local_offsets.push_back(local_offset);
     }
 
     // spawn unis
