@@ -35,6 +35,8 @@ class Player
   	Player() = default;
 	Player(Scene::Transform *transform_);
 	Scene::Transform *transform;
+	std::vector<Scene::Transform *> part_transforms;
+	std::vector<glm::vec3> part_local_offsets;
 	glm::vec3 start_position; // const
 	BoxCollider attack_range_;
 	glm::vec3 attack_base_offset;

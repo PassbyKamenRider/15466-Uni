@@ -91,13 +91,13 @@ static GLuint load_texture_2d(std::string const &rel_path) {
 
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-    MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
+    MeshBuffer const *ret = new MeshBuffer(data_path("dev.pnct"));
     hexapod_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
     return ret;
 });
 
 Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
-    return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+    return new Scene(data_path("dev.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
         // don't add drawables for uni spawn positions, necessary information will be saved later in Scene constructor
         if (transform->name.rfind("SpawnPos", 0) == 0)
             return;
@@ -168,6 +168,13 @@ void Player::update_position(float elapsed, glm::vec2 const &input)
     }
 
     transform->position += glm::vec3(velocity_.x, 0.0f, velocity_.y) * elapsed;
+    glm::mat3 body_rot = glm::mat3_cast(transform->rotation);
+    for (size_t i = 0; i < part_transforms.size(); ++i)
+    {
+        Scene::Transform *part = part_transforms[i];
+        glm::vec3 world_pos = transform->position + body_rot * part_local_offsets[i];
+        part->position = world_pos;
+    }
 }
 
 void Player::resolve_collisions(std::vector<BoxCollider> const &boxes, std::vector<TriggerCollider> &triggers)
@@ -360,9 +367,34 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 
     for (auto &transform : scene.transforms)
     {
-        if (transform.name == "Sphere") {
-            player = Player(&transform);
-        } else if (transform.name.rfind("Collider", 0) == 0)
+        if (transform.name.rfind("body", 0) == 0) {
+            player.transform = &transform;
+        } else if (transform.name.rfind("backpack", 0) == 0)
+        {
+            player.part_transforms.push_back(&transform);
+        } else if (transform.name.rfind("Circle", 0) == 0)
+        {
+            player.part_transforms.push_back(&transform);
+        }  else if (transform.name.rfind("Cube", 0) == 0)
+        {
+            player.part_transforms.push_back(&transform);
+        } else if (transform.name.rfind("goggles", 0) == 0)
+        {
+            player.part_transforms.push_back(&transform);
+        } else if (transform.name.rfind("head", 0) == 0)
+        {
+            player.part_transforms.push_back(&transform);
+        } else if (transform.name.rfind("mouthpiece", 0) == 0)
+        {
+            player.part_transforms.push_back(&transform);
+        } else if (transform.name.rfind("pipe", 0) == 0)
+        {
+            player.part_transforms.push_back(&transform);
+        } else if (transform.name.rfind("Rake", 0) == 0)
+        {
+            player.part_transforms.push_back(&transform);
+        }
+        else if (transform.name.rfind("Collider", 0) == 0)
         {
             BoxCollider box;
             box.center = transform.position;
@@ -381,6 +413,15 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
             player.attack_range_ = box;
             player.attack_base_offset = box.center;
         }
+    }
+
+    // save local offsets for player parts
+    glm::mat3 body_rot = glm::mat3_cast(player.transform->rotation);
+    for (auto part : player.part_transforms)
+    {
+        glm::vec3 delta = part->position - player.transform->position;
+        glm::vec3 local_offset = glm::transpose(body_rot) * delta;
+        player.part_local_offsets.push_back(local_offset);
     }
 
     // spawn unis
