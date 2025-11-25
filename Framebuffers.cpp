@@ -14,7 +14,7 @@ Framebuffers framebuffers;
 float NEAR_CLIP = 0.01f;
 float FAR_CLIP = 55.0f;
 float FOCAL_DISTANCE = 30.0f;
-float BLUR_SCALE = 150.0f;
+int BLUR_SCALE = 150;
 float BLUR_RADIUS_MAX = 30.0f;
 
 void Framebuffers::realloc(glm::uvec2 const &drawable_size) {
@@ -187,7 +187,7 @@ struct DoFBlurXProgram {
 		glUniform1f(glGetUniformLocation(program, "nearClip"), NEAR_CLIP);
 		glUniform1f(glGetUniformLocation(program, "farClip"), FAR_CLIP);
 		glUniform1f(glGetUniformLocation(program, "focalDistance"), FOCAL_DISTANCE);
-		glUniform1f(glGetUniformLocation(program, "blurScale"), BLUR_SCALE);
+		glUniform1i(glGetUniformLocation(program, "blurScale"), BLUR_SCALE);
 		glUniform1f(glGetUniformLocation(program, "blurMax"), BLUR_RADIUS_MAX);
 
 		glUseProgram(0);
@@ -294,7 +294,7 @@ struct DoFBlurYProgram {
 		glUniform1f(glGetUniformLocation(program, "nearClip"), NEAR_CLIP);
 		glUniform1f(glGetUniformLocation(program, "farClip"), FAR_CLIP);
 		glUniform1f(glGetUniformLocation(program, "focalDistance"), FOCAL_DISTANCE);
-		glUniform1f(glGetUniformLocation(program, "blurScale"), BLUR_SCALE);
+		glUniform1i(glGetUniformLocation(program, "blurScale"), BLUR_SCALE);
 		glUniform1f(glGetUniformLocation(program, "blurMax"), BLUR_RADIUS_MAX);
 
 		glUseProgram(0);

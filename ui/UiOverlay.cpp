@@ -85,8 +85,6 @@ void UiOverlay::draw(glm::uvec2 drawable_size, UiModel const& m) {
             glm::vec3(H,0,0), glm::vec3(0,H,0),
             glm::u8vec4(0xff,0xff,0xff,0x00));
     }
-
-    glEnable(GL_DEPTH_TEST);
 }
 
 void UiOverlay::draw_title(glm::uvec2 drawable_size, const char* title) {
@@ -98,8 +96,6 @@ void UiOverlay::draw_title(glm::uvec2 drawable_size, const char* title) {
     draw_centered_text(lines, aspect, drawable_size, title, 0.18f, 0.25f);
     draw_centered_text(lines, aspect, drawable_size, "Press Enter to Start", 0.09f, -0.05f);
     draw_centered_text(lines, aspect, drawable_size, "Press Esc to Quit", 0.09f, -0.18f);
-
-    glEnable(GL_DEPTH_TEST);
 }
 
 void UiOverlay::draw_pause(glm::uvec2 drawable_size) {
@@ -120,8 +116,6 @@ void UiOverlay::draw_pause(glm::uvec2 drawable_size) {
     draw_centered_text(lines, aspect, drawable_size, "PAUSED", 0.12f, 0.02f);
     draw_centered_text(lines, aspect, drawable_size, "Press ESC to Resume", 0.08f, -0.20f);
     draw_centered_text(lines, aspect, drawable_size, "Press R to Return to Title", 0.08f, -0.40f);
-
-    glEnable(GL_DEPTH_TEST);
 }
 
 void UiOverlay::draw_gameover(glm::uvec2 drawable_size, int score) {
@@ -137,6 +131,4 @@ void UiOverlay::draw_gameover(glm::uvec2 drawable_size, int score) {
     draw_centered_text(lines, aspect, drawable_size, score_line, 0.09f, 0.03f);
     draw_centered_text(lines, aspect, drawable_size, "Press Enter to Restart", 0.09f, -0.16f);
     draw_centered_text(lines, aspect, drawable_size, "Press Esc to Quit", 0.09f, -0.29f);
-
-    glEnable(GL_DEPTH_TEST);
 }
