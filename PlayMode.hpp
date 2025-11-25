@@ -43,15 +43,24 @@ class Player
   	Player() = default;
 	Player(Scene::Transform *transform_);
 	Scene::Transform *transform;
-	std::vector<PlayerPartInfo> parts;
 	glm::vec3 start_position; // const
+
+	std::vector<PlayerPartInfo> parts;
+	PlayerPartInfo rakePart;
+	glm::vec3 rakeStartPosition;
+	bool isAttacking = false;
+	float attack_timer = 0.0f;
+	float attack_duration = 0.5f;
 	BoxCollider attack_range_;
 	glm::vec3 attack_base_offset;
+
 	void update_position(float elapsed, glm::vec2 const &input);
 	void rotate_player(float angle);
 	void resolve_collisions(std::vector<BoxCollider> const &boxes, std::vector<TriggerCollider> &triggers);
 	void dash(glm::vec2 const &input);
 	void reset_player_speed();
+	void start_attack();
+	void update_attack(float elapsed);
 	
 	private:
 	float radius_ = 1.0f; // const

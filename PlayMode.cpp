@@ -139,7 +139,10 @@ void Player::dash(glm::vec2 const &input)
 
 void Player::update_position(float elapsed, glm::vec2 const &input)
 {
+    if (isAttacking) return;
+
     if (dash_cooldown_timer_ > 0.0f) { dash_cooldown_timer_ -= elapsed; }
+    
     if (is_dashing_) {
         dash_progress_ += elapsed;
         if (dash_progress_ < dash_duration_) {
@@ -169,6 +172,16 @@ void Player::update_position(float elapsed, glm::vec2 const &input)
 
     transform->position += glm::vec3(velocity_.x, 0.0f, velocity_.y) * elapsed;
 
+    // rotate player to face movement direction
+    if (glm::length(velocity_) > 0.001f)
+    {
+        glm::vec2 move_dir = glm::normalize(velocity_);
+        float angle_deg = glm::degrees(std::atan2(move_dir.y, move_dir.x));
+        angle_deg += 90.0f;
+        rotate_player(angle_deg);
+    }
+
+    // update parts positions
     glm::mat3 body_rot = glm::mat3_cast(transform->rotation);
     for (size_t i = 0; i < parts.size(); ++i)
     {
@@ -180,8 +193,8 @@ void Player::update_position(float elapsed, glm::vec2 const &input)
 
 void Player::rotate_player(float angle)
 {
-    glm::quat delta = glm::angleAxis(glm::radians(angle), glm::vec3(0,0,1));
-    transform->rotation = delta * transform->rotation;
+    glm::quat target_rot = glm::angleAxis(glm::radians(angle), glm::vec3(0,0,1));
+    transform->rotation = target_rot;
 
     for (auto &p : parts)
     {
@@ -248,6 +261,33 @@ void Player::resolve_collisions(std::vector<BoxCollider> const &boxes, std::vect
     }
 }
 
+void Player::start_attack()
+{
+    if (isAttacking) return;
+
+    isAttacking = true;
+    rakeStartPosition = rakePart.transform->position;
+    attack_timer = 0.0f;
+}
+
+void Player::update_attack(float elapsed)
+{
+    if (!isAttacking) return;
+
+    attack_timer += elapsed;
+    float t = attack_timer / attack_duration;
+    if (t >= 1.0f)
+    {
+        isAttacking = false;
+        rakePart.transform->position = rakeStartPosition;
+        return;
+    }
+
+    float progress = (t < 0.5f) ? (t / 0.5f) : (1.0f - (t-0.5f)/0.5f);
+
+    glm::vec3 forward = transform->rotation * glm::vec3(0.0f, -1.0f, 0.0f);
+    rakePart.transform->position = rakeStartPosition + forward * 2.0f * progress;
+}
 // - FollowCamera --------------------------------------------------------------
 
 FollowCamera::FollowCamera(Scene::Transform *transform_, Scene::Transform *target)
@@ -410,6 +450,11 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
             info.transform = &transform;
             info.local_offset = transform.position - player.transform->position;
             info.local_rotation = glm::inverse(player.transform->rotation) * transform.rotation;
+            if (transform.name.rfind("Rake", 0) == 0)
+            {
+                player.rakePart = info;
+            }
+
             player.parts.push_back(info);
         }
         else if (transform.name.rfind("Collider", 0) == 0)
@@ -626,6 +671,11 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
             glm::vec3 diff = target_world_position - player.transform->position;
             glm::vec2 dir  = glm::normalize(glm::vec2(diff.x, diff.z));
 
+            // rotate player to face target
+            float angle_deg = glm::degrees(std::atan2(dir.y, dir.x));
+            angle_deg += 90.0f;
+            player.rotate_player(angle_deg);
+
             float c = dir.x;
             float s = dir.y;
 
@@ -637,7 +687,10 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 
             player.attack_range_.center = player.attack_range_.rotation * player.attack_base_offset;
 
+            player.start_attack();
+
             uni_manager.collect_uni(scene, player.transform->position, player.attack_range_);
+
             return true;
         }
     }
@@ -661,6 +714,7 @@ void PlayMode::update(float elapsed) {
         return;
     }
 
+    player.update_attack(elapsed);
     player.update_position(elapsed, get_move_input());
     player.resolve_collisions(colliders, triggers);
     virtual_camera.update_position(elapsed);
