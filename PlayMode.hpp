@@ -41,6 +41,7 @@ class Player
 	void update_position(float elapsed, glm::vec2 const &input);
 	void resolve_collisions(std::vector<BoxCollider> const &boxes, std::vector<TriggerCollider> &triggers);
 	void dash(glm::vec2 const &input);
+	void reset_player_speed();
 	
 	private:
 	float radius_ = 1.0f; // const
@@ -112,7 +113,7 @@ struct PlayMode : Mode {
 	void end_game();
     void reset_game();
 
-	float level_time_limit = 45.0f;
+	float level_time_limit = 60.0f;
 	float time_remaining = 0.0f;
 
 	std::unique_ptr<UiOverlay> ui;
@@ -121,6 +122,12 @@ struct PlayMode : Mode {
     GameState game_state = GameState::Title;
 
 	GLuint title_tex = 0;
+
+	GLuint ending_success_tex = 0;
+	GLuint ending_fail_tex = 0;
+
+	size_t win_threshold = 20;
+	bool did_win = false;
 
 	// ----- intro screens -----
 	std::array<GLuint, 4> intro_tex = {0,0,0,0}; // p1~p4

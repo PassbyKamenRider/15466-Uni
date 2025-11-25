@@ -308,12 +308,17 @@ void UniManager::collect_uni(Scene &scene, glm::vec3 player_position, BoxCollide
 
 // - PlayMode helpers ----------------------------------------------------------
 
+void Player::reset_player_speed()
+{
+    velocity_ = target_velocity_ = glm::vec2(0.0f);
+}
+
 void PlayMode::reset_game() {
     player.transform->position = player.start_position;
+    player.reset_player_speed();
     uni_manager.clear_unis(scene);
     uni_manager.spawn_unis(scene);
     time_remaining = level_time_limit;
-    game_state = GameState::Playing;
     left.pressed = false;
     right.pressed = false;
     up.pressed = false;
@@ -325,6 +330,7 @@ void PlayMode::reset_game() {
 }
 
 void PlayMode::end_game() {
+    did_win = (uni_manager.num_collected >= win_threshold);
     game_state = GameState::GameOver;
 }
 
@@ -395,6 +401,7 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
     ui = std::make_unique<UiOverlay>();
 
 	title_tex = load_texture_2d("title_screen.png");
+    
     // ---- intro: load textures ----
     intro_tex[0] = load_texture_2d("p1.png");
     intro_tex[1] = load_texture_2d("p2.png");
@@ -405,6 +412,10 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 	init_intro_program();
     // ---- intro: build fullscreen quad VAO ----
 	// LitColorTextureProgram expects PNCT (Position, Normal, Color, TexCoord)
+
+    ending_success_tex = load_texture_2d("ending_success.png");
+    ending_fail_tex    = load_texture_2d("ending_fail.png");
+
 	struct IntroVert {
 		glm::vec4 pos;
 		glm::vec3 nor;
@@ -462,6 +473,9 @@ PlayMode::~PlayMode() {
     if (intro_vbo) glDeleteBuffers(1, &intro_vbo);
     if (intro_vao) glDeleteVertexArrays(1, &intro_vao);
 	if (title_tex) glDeleteTextures(1, &title_tex);
+    if (ending_success_tex) glDeleteTextures(1, &ending_success_tex);
+    if (ending_fail_tex)    glDeleteTextures(1, &ending_fail_tex);
+
 }
 
 bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
@@ -488,6 +502,7 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
             intro_idx++;
             if (intro_idx >= 4) {
                 reset_game();
+                game_state = GameState::Playing;
             }
             return true;
 
@@ -516,12 +531,14 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
                 game_state = GameState::Playing; return true;
             }
             if (evt.key.key == SDLK_R) {
+                reset_game();
                 game_state = GameState::Title; return true;
             }
             break;
 
         case GameState::GameOver:
             if (evt.key.key == SDLK_RETURN) {
+                game_state = GameState::Title;
                 reset_game(); return true;
             }
             if (evt.key.key == SDLK_ESCAPE) {
@@ -679,7 +696,27 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			glUseProgram(0);
 		}
 		else {
-			ui->draw_gameover(drawable_size, (int)uni_manager.num_collected);
+			init_intro_program();
+            glUseProgram(intro_program);
+
+            glm::mat4 I(1.0f);
+            if (intro_object_to_clip >= 0)
+                glUniformMatrix4fv(intro_object_to_clip, 1, GL_FALSE, glm::value_ptr(I));
+
+            GLuint end_tex = did_win ? ending_success_tex : ending_fail_tex;
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, end_tex);
+            if (intro_tex_sampler >= 0) glUniform1i(intro_tex_sampler, 0);
+
+            glBindVertexArray(intro_vao);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glUseProgram(0);
+
+            //ui->draw_gameover(drawable_size, (int)uni_manager.num_collected);
 		}
         glEnable(GL_DEPTH_TEST);
         GL_ERRORS();
