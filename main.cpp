@@ -16,6 +16,9 @@
 //for screenshots:
 #include "load_save_png.hpp"
 
+//for intro screen:
+#include "GP25IntroMode.hpp"
+
 //Includes for libSDL:
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -115,7 +118,11 @@ int main(int argc, char **argv) {
 	call_load_functions();
 
 	//------------ create game mode + make current --------------
-	Mode::set_current(std::make_shared< PlayMode >());
+	
+	//Mode::set_current(std::make_shared< PlayMode >());
+	Mode::set_current( std::make_shared< GP25IntroMode >( [](){
+		Mode::set_current(std::make_shared< PlayMode >());
+	} ));
 
 	//------------ main loop ------------
 
