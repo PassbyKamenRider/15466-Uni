@@ -51,8 +51,8 @@ class Player
 	bool isAttacking = false;
 	float attack_timer = 0.0f;
 	float attack_duration = 0.5f;
-	BoxCollider attack_range_;
-	glm::vec3 attack_base_offset;
+	BoxCollider attack_range_{};
+	glm::vec3 attack_base_offset{};
 
 	void update_position(float elapsed, glm::vec2 const &input);
 	void rotate_player(float angle);
