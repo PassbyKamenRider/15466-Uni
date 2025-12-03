@@ -46,8 +46,8 @@ class Player
 	glm::vec3 start_position; // const
 
 	std::vector<PlayerPartInfo> parts;
-	PlayerPartInfo rakePart;
-	glm::vec3 rakeStartPosition;
+	PlayerPartInfo rakePart{};
+	glm::vec3 rakeStartPosition{};
 	bool isAttacking = false;
 	float attack_timer = 0.0f;
 	float attack_duration = 0.5f;
