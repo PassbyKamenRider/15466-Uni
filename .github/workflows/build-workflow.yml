@@ -1,0 +1,141 @@
+name: Build
+on:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+env:
+  BASE_NAME: game2
+  NEST_LIBS_VERSION: v0.14
+
+jobs:
+  build-windows:
+    name: Build (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: ilammy/msvc-dev-cmd@v1.4.1
+      - name: Checkout Code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Fetch Libraries
+        shell: cmd
+        run: |
+          python .github/workflows/download-file.py https://github.com/15-466/nest-libs/releases/download/%NEST_LIBS_VERSION%/nest-libs-windows-%NEST_LIBS_VERSION%.zip ../nest-libs.zip
+          cd ..
+          "C:\Program Files\7-Zip\7z.exe" x -o. nest-libs.zip
+      - name: Build Code
+        shell: cmd
+        run: |
+          dir/w
+          #call "C:\Program Files (x86)\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          node Maekfile.js -q && copy README.md dist
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BASE_NAME }}-windows
+          path: dist
+      - name: Package (Release)
+        if: github.event_name == 'release'
+        shell: cmd
+        run: |
+          rename dist "%BASE_NAME%-windows-%TAG_NAME%"
+          "C:\Program Files\7-Zip\7z.exe" a -r "%BASE_NAME%-windows-%TAG_NAME%.zip" "%BASE_NAME%-windows-%TAG_NAME%"
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+      - name: Upload Result
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ env.BASE_NAME }}-windows-${{ github.event.release.tag_name }}.zip
+          asset_name: ${{ env.BASE_NAME }}-windows-${{ github.event.release.tag_name }}.zip
+          asset_content_type: application/zip
+  build-linux:
+    name: Build (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Fetch Libraries
+        shell: bash
+        run: |
+          cd ..
+          wget https://github.com/15-466/nest-libs/releases/download/${NEST_LIBS_VERSION}/nest-libs-linux-${NEST_LIBS_VERSION}.tar.gz -Onest-libs.tar.gz
+          tar xfz nest-libs.tar.gz
+      - name: Build Code
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install libgl-dev libasound2-dev
+          ls
+          node Maekfile.js -q && cp README.md dist
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BASE_NAME }}-linux
+          path: dist
+      - name: Package
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          mv dist "$BASE_NAME""-linux-""$TAG_NAME"
+          tar cvfz "$BASE_NAME""-linux-""$TAG_NAME"".tar.gz" "$BASE_NAME""-linux-""$TAG_NAME"
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+      - name: Upload Result
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ env.BASE_NAME }}-linux-${{ github.event.release.tag_name }}.tar.gz
+          asset_name: ${{ env.BASE_NAME }}-linux-${{ github.event.release.tag_name }}.tar.gz
+          asset_content_type: application/gzip
+  build-macos:
+    name: Build (MacOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Fetch Libraries
+        shell: bash
+        run: |
+          cd ..
+          wget https://github.com/15-466/nest-libs/releases/download/${NEST_LIBS_VERSION}/nest-libs-macos-${NEST_LIBS_VERSION}.tar.gz -Onest-libs.tar.gz
+          tar xfz nest-libs.tar.gz
+      - name: Build Code
+        shell: bash
+        run: |
+          ls
+          node Maekfile.js -q && cp README.md dist
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BASE_NAME }}-macos
+          path: dist
+      - name: Package
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          mv dist "$BASE_NAME""-macos-""$TAG_NAME"
+          tar cvfz "$BASE_NAME""-macos-""$TAG_NAME"".tar.gz" "$BASE_NAME""-macos-""$TAG_NAME"
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+      - name: Upload Result
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ env.BASE_NAME }}-macos-${{ github.event.release.tag_name }}.tar.gz
+          asset_name: ${{ env.BASE_NAME }}-macos-${{ github.event.release.tag_name }}.tar.gz
+          asset_content_type: application/gzip
