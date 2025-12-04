@@ -48,6 +48,7 @@ class Player
 	std::vector<PlayerPartInfo> parts;
 	PlayerPartInfo rakePart{};
 	glm::vec3 rakeStartPosition{};
+	glm::vec3 attack_forward{};
 	bool isAttacking = false;
 	float attack_timer = 0.0f;
 	float attack_duration = 0.5f;
@@ -63,7 +64,7 @@ class Player
 	void update_attack(float elapsed);
 	
 	private:
-	float radius_ = 1.0f; // const
+	float radius_ = 2.0f; // const
 	float swim_speed_ = 7.0f; // const
 	float acceleration_ = 10.0f; // const
 	

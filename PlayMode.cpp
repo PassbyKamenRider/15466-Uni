@@ -286,7 +286,7 @@ void Player::update_attack(float elapsed)
     float progress = (t < 0.5f) ? (t / 0.5f) : (1.0f - (t-0.5f)/0.5f);
 
     glm::vec3 forward = transform->rotation * glm::vec3(0.0f, -1.0f, 0.0f);
-    rakePart.transform->position = rakeStartPosition + forward * 2.0f * progress;
+    rakePart.transform->position = rakeStartPosition + attack_forward * 2.0f * progress;
 }
 // - FollowCamera --------------------------------------------------------------
 
@@ -686,6 +686,30 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
             );
 
             player.attack_range_.center = player.attack_range_.rotation * player.attack_base_offset;
+
+            player.attack_forward = glm::normalize(glm::vec3(dir.x, 0.0f, dir.y));
+
+            // build a look rotation pointing Z axis to attack_forward_ 
+            {
+                glm::vec3 fwd_ = glm::normalize(glm::vec3(player.attack_forward.x, 0.0f, player.attack_forward.z));
+                glm::vec3 up_  = glm::vec3(0, 1, 0);
+                glm::vec3 right_ = glm::normalize(glm::cross(up_, fwd_));
+                glm::vec3 adjustedUp_ = glm::cross(fwd_, right_);
+
+                glm::mat3 lookRotation(
+                    right_,
+                    adjustedUp_,
+                    fwd_
+                );
+
+                glm::mat3 fix = glm::mat3(
+                    1, 0, 0,
+                    0, 0, -1,
+                    0, 1, 0
+                );
+
+                player.rakePart.transform->rotation = lookRotation * fix;
+            }
 
             player.start_attack();
 
