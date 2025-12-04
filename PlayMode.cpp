@@ -285,7 +285,6 @@ void Player::update_attack(float elapsed)
 
     float progress = (t < 0.5f) ? (t / 0.5f) : (1.0f - (t-0.5f)/0.5f);
 
-    glm::vec3 forward = transform->rotation * glm::vec3(0.0f, -1.0f, 0.0f);
     rakePart.transform->position = rakeStartPosition + attack_forward * 2.0f * progress;
 }
 // - FollowCamera --------------------------------------------------------------
